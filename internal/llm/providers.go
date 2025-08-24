@@ -24,7 +24,7 @@ func NewOpenAIProvider(config Config) (*OpenAIProvider, error) {
 	}
 
 	client := openai.NewClient(config.APIKey)
-	if config.BaseURL != nil {
+	if config.BaseURL != "" {
 		// support for custom OpenAI-compatible endpoints
 		clientConfig := openai.DefaultConfig(config.APIKey)
 		clientConfig.BaseURL = config.BaseURL
