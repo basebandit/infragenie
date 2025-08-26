@@ -37,6 +37,10 @@ func (b *BaseAgent) Type() models.AgentType {
 	return b.agentType
 }
 
+func (b *BaseAgent) Capabilities() []string {
+	return b.capabilities
+}
+
 func (b *BaseAgent) Health() HealthStatus {
 	return HealthStatus{
 		Status:    "healthy",
