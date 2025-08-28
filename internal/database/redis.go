@@ -11,7 +11,7 @@ import (
 )
 
 type RedisClient struct {
-	client *redis.Client
+	Client *redis.Client
 }
 
 func NewRedisConnection(redisURL string) *RedisClient {
@@ -30,11 +30,11 @@ func NewRedisConnection(redisURL string) *RedisClient {
 		panic(fmt.Sprintf("Failed to connect to Redis: %v", err))
 	}
 
-	return &RedisClient{client: client}
+	return &RedisClient{Client: client}
 }
 
 func (r *RedisClient) Close() error {
-	return r.client.Close()
+	return r.Client.Close()
 }
 
 func (r *RedisClient) EnqueueTask(task *models.Task) error {
@@ -44,13 +44,13 @@ func (r *RedisClient) EnqueueTask(task *models.Task) error {
 	}
 
 	queueName := fmt.Sprintf("tasks:%s", task.AgentType)
-	return r.client.LPush(context.Background(), queueName, taskJSON).Err()
+	return r.Client.LPush(context.Background(), queueName, taskJSON).Err()
 }
 
 func (r *RedisClient) DequeueTask(agentType models.AgentType) (*models.Task, error) {
 	queueName := fmt.Sprintf("tasks:%s", agentType)
 
-	result, err := r.client.BRPop(context.Background(), 5*time.Second, queueName).Result()
+	result, err := r.Client.BRPop(context.Background(), 5*time.Second, queueName).Result()
 	if err != nil {
 		return nil, err
 	}
@@ -66,11 +66,11 @@ func (r *RedisClient) SetCache(key string, value interface{}, expiration time.Du
 		return err
 	}
 
-	return r.client.Set(context.Background(), key, valueJSON, expiration).Err()
+	return r.Client.Set(context.Background(), key, valueJSON, expiration).Err()
 }
 
 func (r *RedisClient) GetCache(key string, dest interface{}) error {
-	value, err := r.client.Get(context.Background(), key).Result()
+	value, err := r.Client.Get(context.Background(), key).Result()
 	if err != nil {
 		return err
 	}
