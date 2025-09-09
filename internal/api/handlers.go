@@ -212,7 +212,7 @@ func (h *Handler) ListTasks(c *gin.Context) {
 	}
 
 	// Calculate pagination info
-	totalPages := (total + limit - 1) / limit
+	totalPages := (int(total) + limit - 1) / limit
 	hasNext := page < totalPages
 	hasPrev := page > 1
 
