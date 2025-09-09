@@ -3,6 +3,7 @@ package llm
 import (
 	"context"
 	"fmt"
+	"time"
 )
 
 type Provider string
@@ -150,4 +151,58 @@ func (c *Client) GetAvailableProviders(ctx context.Context) []Provider {
 		}
 	}
 	return available
+}
+
+func (c *Client) GetPrimaryProvider() Provider {
+	return c.primary
+}
+
+func (c *Client) SetPrimaryProvider(provider Provider) error {
+	if _, exists := c.providers[provider]; !exists {
+		return fmt.Errorf("provider %s is not configured", provider)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if !c.providers[provider].IsAvailable(ctx) {
+		return fmt.Errorf("provider %s is not currently available", provider)
+	}
+
+	c.primary = provider
+	return nil
+}
+
+func (c *Client) GetProviderModel(provider Provider) string {
+	if p, exists := c.providers[provider]; exists {
+		return p.GetModel()
+	}
+	return ""
+}
+
+func (c *Client) GetProviderMetrics(ctx context.Context) map[Provider]interface{} {
+	metrics := make(map[Provider]interface{})
+
+	for providerType, provider := range c.providers {
+		startTime := time.Now()
+		available := provider.IsAvailable(ctx)
+		responseTime := time.Since(startTime)
+
+		metrics[providerType] = map[string]interface{}{
+			"available":        available,
+			"response_time_ms": responseTime.Milliseconds(),
+			"model":            provider.GetModel(),
+			"last_checked":     time.Now().Unix(),
+		}
+	}
+	return metrics
+}
+
+func (c *Client) GetProviderStatus(ctx context.Context) map[Provider]bool {
+	status := make(map[Provider]bool)
+	for providerType, provider := range c.providers {
+		status[providerType] = provider.IsAvailable(ctx)
+	}
+
+	return status
 }
