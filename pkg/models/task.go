@@ -48,6 +48,24 @@ type Task struct {
 	Priority     int                    `json:"priority"`
 }
 
+type TaskStats struct {
+	Total     int64 `json:"total" gorm:"column:total"`
+	Pending   int64 `json:"pending" gorm:"column:pending"`
+	Running   int64 `json:"running" gorm:"column:running"`
+	Completed int64 `json:"completed" gorm:"column:completed"`
+	Failed    int64 `json:"failed" gorm:"column:failed"`
+}
+
+type TaskFilter struct {
+	Status    TaskStatus `json:"status,omitempty"`
+	Type      TaskType   `json:"type,omitempty"`
+	AgentType AgentType  `json:"agent_type,omitempty"`
+	Page      int        `json:"page"`
+	Limit     int        `json:"limit"`
+	SortBy    string     `json:"sort_by"`
+	SortOrder string     `json:"sort_order"`
+}
+
 type InfrastructureRequest struct {
 	NaturalLanguage string            `json:"natural_language" binding:"required"`
 	Context         map[string]string `json:"context"`
