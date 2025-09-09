@@ -17,15 +17,29 @@ import (
 )
 
 type Manager struct {
-	agents    map[models.AgentType]agents.Agent
-	db        *database.PostgresDB
-	redis     *database.RedisClient
-	taskQueue *TaskQueue
-	events    *EventPublisher
-	logger    *utils.Logger
-	ctx       context.Context
-	cancel    context.CancelFunc
-	wg        sync.WaitGroup
+	agents          map[models.AgentType]agents.Agent
+	db              *database.PostgresDB
+	redis           *database.RedisClient
+	taskQueue       *TaskQueue
+	events          *EventPublisher
+	logger          *utils.Logger
+	ctx             context.Context
+	cancel          context.CancelFunc
+	wg              sync.WaitGroup
+	stats           *OrchestratorStats
+	statsMutex      sync.RWMutex
+	statsUpdateChan chan struct{}
+}
+
+type OrchestratorStats struct {
+	StartTime            time.Time `json:"start_time"`
+	TotalRequests        int64     `json:"total_requests"`
+	ActiveTasks          int64     `json:"active_tasks"`
+	CompletedTasks       int64     `json:"completed_tasks"`
+	FailedTasks          int64     `json:"failed_tasks"`
+	QueueSize            int64     `json:"queue_size"`
+	AverageExecutionTime int64     `json:"average_execution_time_ms"`
+	LastStatusUpdate     time.Time `json:"last_stats_update"`
 }
 
 func NewManager(
@@ -47,15 +61,22 @@ func NewManager(
 	taskQueue := NewTaskQueue(redis)
 	events := NewEventPublisher(redis)
 
+	stats := &OrchestratorStats{
+		StartTime:        time.Now(),
+		LastStatusUpdate: time.Now(),
+	}
+
 	return &Manager{
-		agents:    agentsMap,
-		db:        db,
-		redis:     redis,
-		taskQueue: taskQueue,
-		events:    events,
-		logger:    logger,
-		ctx:       ctx,
-		cancel:    cancel,
+		agents:          agentsMap,
+		db:              db,
+		redis:           redis,
+		taskQueue:       taskQueue,
+		events:          events,
+		logger:          logger,
+		ctx:             ctx,
+		cancel:          cancel,
+		stats:           stats,
+		statsUpdateChan: make(chan struct{}, 1),
 	}
 }
 
@@ -128,6 +149,10 @@ func (m *Manager) SubmitTask(request *models.InfrastructureRequest) (*models.Tas
 	return task, nil
 }
 
+func (m *Manager) ListTasks(filter models.TaskFilter) ([]models.Task, int64, error) {
+	return m.db.ListTasks(filter)
+}
+
 func (m *Manager) GetTaskStatus(taskID string) (*models.Task, *models.Result, error) {
 	task, err := m.db.GetTask(taskID)
 	if err != nil {
@@ -143,6 +168,51 @@ func (m *Manager) GetTaskStatus(taskID string) (*models.Task, *models.Result, er
 	}
 
 	return task, result, nil
+}
+
+func (m *Manager) GetStats() OrchestratorStats {
+	m.statsMutex.RLock()
+	defer m.statsMutex.RUnlock()
+
+	// return a copy to avoid race conditions
+	return *m.stats
+}
+
+func (m *Manager) UpdateStats() {
+	dbStats, err := m.db.GetTaskStats()
+	if err != nil {
+		m.logger.Error(fmt.Sprintf("Failed to get task stats from DB: %v", err))
+		return
+	}
+
+	avgTime, err := m.db.GetAverageExecutionTime()
+	if err != nil {
+		m.logger.Error(fmt.Sprintf("Failed to get average execution time: %v", err))
+		avgTime = 0
+	}
+
+	// Get queue sizes from Redis
+	queueSize := int64(0)
+	for agentType := range m.agents {
+		queueName := fmt.Sprintf("tasks:%s", agentType)
+		size, err := m.redis.Client.LLen(context.Background(), queueName).Result()
+		if err == nil {
+			queueSize += size
+		}
+	}
+
+	// Update stats atomically
+	m.statsMutex.Lock()
+	m.stats.TotalRequests = dbStats.Total
+	m.stats.ActiveTasks = dbStats.Running
+	m.stats.CompletedTasks = dbStats.Completed
+	m.stats.FailedTasks = dbStats.Failed
+	m.stats.QueueSize = queueSize
+	m.stats.AverageExecutionTime = avgTime
+	m.stats.LastStatusUpdate = time.Now()
+	m.statsMutex.Unlock()
+
+	m.logger.Debug(fmt.Sprintf("Stats updated: %+v", *m.stats))
 }
 
 func (m *Manager) workerLoop(ctx context.Context, agentType models.AgentType, agent agents.Agent) {
