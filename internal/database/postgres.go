@@ -79,7 +79,7 @@ func (p *PostgresDB) GetPendingTasks() ([]models.Task, error) {
 	return tasks, err
 }
 
-func (p *PostgresDB) CreteResult(result *models.Result) error {
+func (p *PostgresDB) CreateResult(result *models.Result) error {
 	return p.DB.Create(result).Error
 }
 

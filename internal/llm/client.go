@@ -10,7 +10,7 @@ type Provider string
 const (
 	ProviderOpenAI    Provider = "openAI"
 	ProviderAnthropic Provider = "anthropic"
-	ProviderGoodle    Provider = "google"
+	ProviderGoogle    Provider = "google"
 	ProviderAzure     Provider = "azure"
 	ProviderAWS       Provider = "aws"
 	ProviderLocal     Provider = "local"
