@@ -61,7 +61,7 @@ func (e *Engine) Run(ctx context.Context, in Input) (*Result, error) {
 
 	all, skipped = e.runScanners(ctx, in, all, skipped)
 	if e.cfg.Grounder != nil {
-		all = e.applyGrounding(ctx, all)
+		all = e.applyGrounding(ctx, all, in)
 	}
 	all, skipped = e.runReviewers(ctx, in, all, skipped)
 
@@ -120,7 +120,8 @@ func (e *Engine) runReviewers(ctx context.Context, in Input, all []models.Findin
 	return all, skipped
 }
 
-func (e *Engine) applyGrounding(ctx context.Context, fs []models.Finding) []models.Finding {
+func (e *Engine) applyGrounding(ctx context.Context, fs []models.Finding, in Input) []models.Finding {
+	contents := contentMap(in.Diff)
 	minRank := models.SeverityRank(e.cfg.MinGroundSeverity)
 	for i := range fs {
 		if fs[i].Source != models.SourceScanner {
@@ -129,7 +130,7 @@ func (e *Engine) applyGrounding(ctx context.Context, fs []models.Finding) []mode
 		if models.SeverityRank(fs[i].Severity) < minRank {
 			continue
 		}
-		ex, sg, err := e.cfg.Grounder.Ground(ctx, fs[i], "")
+		ex, sg, err := e.cfg.Grounder.Ground(ctx, fs[i], contents[fs[i].File])
 		if err != nil {
 			continue
 		}
@@ -139,6 +140,17 @@ func (e *Engine) applyGrounding(ctx context.Context, fs []models.Finding) []mode
 		fs[i].TrustLevel = "T2"
 	}
 	return fs
+}
+
+func contentMap(d *models.Diff) map[string]string {
+	if d == nil {
+		return nil
+	}
+	out := make(map[string]string, len(d.Files))
+	for _, f := range d.Files {
+		out[f.Path] = f.NewContent
+	}
+	return out
 }
 
 func (e *Engine) filterTrust(fs []models.Finding) []models.Finding {
