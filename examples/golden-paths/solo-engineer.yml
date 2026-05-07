@@ -1,0 +1,70 @@
+# solo-engineer.yml
+#
+# A lightweight Golden Path for solo engineers and small teams. No extends
+# dependency — works standalone from day one. Low noise, high signal: catches
+# the mistakes that actually hurt in production without burying you in warnings.
+#
+# Typical adopters: solo founders, side projects, early-stage startups,
+# open-source maintainers deploying their own tooling.
+
+version: 1
+name: solo-engineer
+
+stacks:
+  platforms:
+    - kubernetes
+    - docker
+  ci:
+    - github-actions
+
+# Minimal label set — just enough to identify the app.
+required_labels:
+  - app
+  - version
+
+security:
+  forbid_image_tag_latest: true   # the one rule you always regret skipping
+
+observability:
+  require_prometheus_annotations: false  # nice to have, not required here
+
+ci_required_steps:
+  - name: tests
+    matches:
+      - "go test"
+      - "pytest"
+      - "npm test"
+      - "yarn test"
+      - "cargo test"
+      - "rspec"
+  - name: container-scan
+    matches:
+      - "aquasec/trivy"
+      - "trivy image"
+      - "grype"
+      - "snyk container"
+
+runtime_rules:
+  require-health-endpoint:
+    pattern: "livenessProbe"
+    message: "no liveness probe — Kubernetes cannot restart stuck pods"
+    suggestion: "Add a livenessProbe to each container spec."
+
+# Keep grounding costs low on a solo budget.
+defaults:
+  fail_on: high
+  budget:
+    tokens: 10000
+    usd: 0.10
+  reviewers:
+    goldenpath: true
+    reliability: true
+    conventions: false   # naming conventions are lower priority for solo work
+
+ignore:
+  - path: examples/**
+    rules: ["*"]
+  - path: hack/**
+    rules: ["*"]
+  - path: scripts/**
+    rules: ["*"]

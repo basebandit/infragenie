@@ -1,0 +1,132 @@
+# fintech-regulated.yml
+#
+# Golden Path for services operating in regulated environments (PCI-DSS,
+# SOC 2, ISO 27001). Extends the platform baseline with mandatory network
+# isolation, hardened container posture, and a full security-scanning CI
+# pipeline. All high-severity findings are escalated to critical.
+#
+# Typical adopters: payments services, card data vaults, identity providers,
+# audit log services — any workload in a CDE or trust boundary.
+
+version: 1
+name: fintech-regulated
+extends: ./platform-baseline.yml
+
+stacks:
+  platforms:
+    - kubernetes
+    - helm
+  cloud:
+    - aws
+    - gcp
+  ci:
+    - github-actions
+
+required_labels:
+  - app.kubernetes.io/name
+  - app.kubernetes.io/version
+  - app.kubernetes.io/component
+  - team
+  - cost-centre
+  - data-classification   # public | internal | confidential | restricted
+  - compliance-scope      # pci | sox | hipaa | none
+
+chart_shape:
+  charts_dir: charts
+  required_files:
+    - Chart.yaml
+    - values.yaml
+    - values-prod.yaml
+
+security:
+  forbid_image_tag_latest: true
+  require_non_root: true
+  require_read_only_rootfs: true
+  require_network_policy: true
+
+observability:
+  require_prometheus_annotations: true
+  require_structured_logs: true   # machine-parseable logs required for SIEM ingestion
+
+ci_required_steps:
+  - name: unit-tests
+    matches:
+      - "go test"
+      - "pytest"
+      - "npm test"
+  - name: sast
+    matches:
+      - "gosec"
+      - "semgrep"
+      - "codeql"
+      - "sonarqube"
+      - "sonar-scanner"
+  - name: container-scan
+    matches:
+      - "aquasec/trivy"
+      - "trivy image"
+      - "grype"
+      - "snyk container"
+  - name: dependency-scan
+    matches:
+      - "trivy fs"
+      - "snyk test"
+      - "owasp-dependency-check"
+      - "pip-audit"
+      - "govulncheck"
+  - name: secret-scan
+    matches:
+      - "trufflehog"
+      - "gitleaks"
+      - "detect-secrets"
+  - name: helm-lint
+    matches:
+      - "helm lint"
+      - "kubeconform"
+
+runtime_rules:
+  require-owner-annotation:
+    pattern: "owner:"
+    message: "manifest is missing an owner annotation"
+    suggestion: "Add `owner: <team-name>` to metadata.annotations."
+  require-pdb:
+    pattern: "PodDisruptionBudget"
+    message: "no PodDisruptionBudget — workload has no disruption protection"
+    suggestion: "Add a PodDisruptionBudget with minAvailable >= 1."
+  require-resource-quota:
+    pattern: "ResourceQuota"
+    message: "no ResourceQuota found in namespace manifests"
+    suggestion: "Add a ResourceQuota to cap resource consumption in the namespace."
+
+# In regulated environments everything high or above is critical — no
+# exceptions. Reviewers can still suppress specific paths via ignore rules.
+rules:
+  goldenpath.security.require-network-policy:
+    severity: critical
+  goldenpath.security.no-latest-tag:
+    severity: critical
+  goldenpath.security.require-non-root:
+    severity: critical
+  reliability.resource-limits:
+    severity: critical
+
+fail_on: high
+
+defaults:
+  budget:
+    tokens: 100000
+    usd: 1.00
+  reviewers:
+    goldenpath: true
+    reliability: true
+    conventions: true
+
+reference_services:
+  - github.com/basebandit/infragenie/examples/reference/payments-service
+  - github.com/basebandit/infragenie/examples/reference/identity-service
+
+ignore:
+  - path: examples/**
+    rules: ["*"]
+  - path: test/**
+    rules: ["*"]

@@ -1,0 +1,90 @@
+# platform-baseline.yml
+#
+# The community root Golden Path. Designed to be the base that team-specific
+# paths extend. Covers labels, security, observability, and CI gates that
+# every service in a mid-to-large engineering org should meet.
+#
+# Usage:
+#   Adopt as-is, or create a team-specific override:
+#
+#   version: 1
+#   extends: ./platform-baseline.yml
+#   security:
+#     require_network_policy: true   # add stricter rules on top
+
+version: 1
+name: platform-baseline
+
+stacks:
+  platforms:
+    - kubernetes
+  ci:
+    - github-actions
+
+# Every K8s manifest must carry these labels so tooling (dashboards, cost
+# allocation, incident routing) can identify the owning team and version.
+required_labels:
+  - app.kubernetes.io/name
+  - app.kubernetes.io/version
+  - app.kubernetes.io/component
+  - team
+
+# Helm chart must contain at minimum a Chart.yaml and a values.yaml.
+chart_shape:
+  charts_dir: charts
+  required_files:
+    - Chart.yaml
+    - values.yaml
+
+security:
+  forbid_image_tag_latest: true    # pin to a digest or semver tag
+  require_non_root: true           # containers must not run as UID 0
+  require_read_only_rootfs: true   # limit blast radius of container compromise
+
+observability:
+  require_prometheus_annotations: true  # prometheus.io/scrape + prometheus.io/port
+
+# Every pipeline must include a vulnerability scan and a test stage.
+ci_required_steps:
+  - name: unit-tests
+    matches:
+      - "go test"
+      - "pytest"
+      - "npm test"
+      - "yarn test"
+      - "mvn test"
+      - "cargo test"
+  - name: vulnerability-scan
+    matches:
+      - "aquasec/trivy"
+      - "trivy image"
+      - "trivy fs"
+      - "snyk test"
+      - "grype"
+
+# Custom checks via runtime_rules. Pattern is a substring that must appear
+# somewhere in the manifest file.
+runtime_rules:
+  require-owner-annotation:
+    pattern: "owner:"
+    message: "manifest is missing an owner annotation"
+    suggestion: "Add `owner: <team-name>` to metadata.annotations."
+
+defaults:
+  fail_on: high
+  budget:
+    tokens: 50000
+    usd: 0.50
+  reviewers:
+    goldenpath: true
+    reliability: true
+    conventions: true
+
+# Suppress noisy rules in example and test directories.
+ignore:
+  - path: examples/**
+    rules: ["*"]
+  - path: test/**
+    rules: ["*"]
+  - path: tests/**
+    rules: ["*"]
