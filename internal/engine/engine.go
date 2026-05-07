@@ -13,7 +13,15 @@ import (
 	"github.com/basebandit/infragenie/internal/repo"
 	"github.com/basebandit/infragenie/internal/reviewers"
 	"github.com/basebandit/infragenie/internal/scanners"
+	"github.com/basebandit/infragenie/internal/telemetry"
 	"github.com/basebandit/infragenie/pkg/models"
+)
+
+// Rough per-grounding-call estimate used for pre-flight budget reservation.
+// Phase F can replace these with provider-reported actuals.
+const (
+	estTokensPerGrounding = 3000
+	estUSDPerGrounding    = 0.0015
 )
 
 type Config struct {
@@ -23,9 +31,10 @@ type Config struct {
 	Grounder  grounding.Grounder
 	Reviewers []reviewers.Reviewer
 
-	MinGroundSeverity models.Severity // default: medium
-	MinConfidence     float64         // default: 0.85
+	MinGroundSeverity models.Severity   // default: medium
+	MinConfidence     float64           // default: 0.85
 	StrictEvidence    bool
+	Budget            *telemetry.Counter // optional; halts grounding when exhausted
 }
 
 type Input struct {
@@ -130,9 +139,17 @@ func (e *Engine) applyGrounding(ctx context.Context, fs []models.Finding, in Inp
 		if models.SeverityRank(fs[i].Severity) < minRank {
 			continue
 		}
+		if e.cfg.Budget != nil {
+			if err := e.cfg.Budget.Reserve(estTokensPerGrounding, estUSDPerGrounding); err != nil {
+				break
+			}
+		}
 		ex, sg, err := e.cfg.Grounder.Ground(ctx, fs[i], contents[fs[i].File])
 		if err != nil {
 			continue
+		}
+		if e.cfg.Budget != nil {
+			e.cfg.Budget.Add(estTokensPerGrounding, estUSDPerGrounding)
 		}
 		fs[i].Explanation = ex
 		fs[i].Suggestion = sg

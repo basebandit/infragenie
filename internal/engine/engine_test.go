@@ -6,9 +6,17 @@ import (
 
 	"github.com/basebandit/infragenie/internal/reviewers"
 	"github.com/basebandit/infragenie/internal/scanners"
+	"github.com/basebandit/infragenie/internal/telemetry"
 	"github.com/basebandit/infragenie/pkg/models"
 	"github.com/stretchr/testify/require"
 )
+
+type stubGrounder struct{ calls int }
+
+func (g *stubGrounder) Ground(_ context.Context, _ models.Finding, _ string) (string, string, error) {
+	g.calls++
+	return "explained", "diff", nil
+}
 
 type stubScanner struct {
 	name      string
@@ -103,4 +111,25 @@ func TestApplySuppressions(t *testing.T) {
 func TestRequiresDiff(t *testing.T) {
 	_, err := New(Config{}).Run(context.Background(), Input{})
 	require.ErrorContains(t, err, "diff is required")
+}
+
+func TestBudgetHaltsGrounding(t *testing.T) {
+	// 5 high-severity scanner findings; budget allows ~2 grounding calls.
+	findings := []models.Finding{
+		{RuleID: "a", Severity: models.SeverityHigh, File: "a"},
+		{RuleID: "b", Severity: models.SeverityHigh, File: "b"},
+		{RuleID: "c", Severity: models.SeverityHigh, File: "c"},
+		{RuleID: "d", Severity: models.SeverityHigh, File: "d"},
+		{RuleID: "e", Severity: models.SeverityHigh, File: "e"},
+	}
+	g := &stubGrounder{}
+	budget := telemetry.NewCounter(telemetry.Budget{Tokens: 7000}) // 2 × 3000 fits, 3rd doesn't
+	e := New(Config{
+		Scanners: []scanners.Scanner{stubScanner{name: "s", available: true, findings: findings}},
+		Grounder: g,
+		Budget:   budget,
+	})
+	_, err := e.Run(context.Background(), Input{Diff: &models.Diff{}})
+	require.NoError(t, err)
+	require.Equal(t, 2, g.calls, "should stop grounding after budget exhausted")
 }
