@@ -93,16 +93,24 @@ ignore:
 
 ## Installation
 
+**Pre-built binaries** (Linux, macOS, Windows — amd64/arm64):
+
+Download from the [releases page](https://github.com/basebandit/infragenie/releases). Each release ships with checksums, cosign signatures, and an SBOM.
+
+**Go install:**
+
 ```bash
 go install github.com/basebandit/infragenie/cmd/infragenie@latest
 ```
 
-Or build from source:
+**Build from source:**
 
 ```bash
 git clone https://github.com/basebandit/infragenie
 cd infragenie
-go build -o infragenie ./cmd/infragenie
+make build          # -> bin/infragenie
+# or
+make install        # installs to $GOBIN
 ```
 
 **Scanner dependencies** (install whichever apply to your stack):
@@ -118,6 +126,14 @@ go install github.com/securego/gosec/v2/cmd/gosec@latest
 ## Quick start
 
 ```bash
+# Bootstrap a goldenpath.yml for the current repo (auto-detects stack)
+infragenie init
+
+# Or pick a starter template
+infragenie init --starter kubernetes
+infragenie init --starter fintech
+infragenie init --starter solo
+
 # Review a local diff against your golden path
 infragenie review --goldenpath goldenpath.yml --diff HEAD~1
 
@@ -144,7 +160,16 @@ infragenie mcp
 | `json` | Machine-readable — pipe to jq, scripts, dashboards |
 | `github` | GitHub Actions — inline PR annotations via workflow commands |
 
-### CLI flags (`review`)
+### CLI flags
+
+**`init`**
+
+```
+--starter, -s   starter template: platform-baseline (default), kubernetes, fintech, solo
+--force         overwrite existing goldenpath.yml
+```
+
+**`review`**
 
 ```
 --goldenpath, -g   path to goldenpath.yml
@@ -261,8 +286,11 @@ Prometheus metrics are exposed on `/metrics`. A Grafana dashboard is included at
 ```bash
 git clone https://github.com/basebandit/infragenie
 cd infragenie
-go build ./...
-go test ./...
+make build        # -> bin/infragenie
+make test         # go test -race ./...
+make test-cover   # coverage report
+make lint         # golangci-lint
+make snapshot     # local goreleaser snapshot (no publish)
 ```
 
 **Environment variables:**
@@ -287,7 +315,7 @@ go test ./...
 | E | done | Telemetry ledger, Prometheus metrics, OTLP tracer, budget gate |
 | F | done | Layer-3 reviewers: golden path, reliability, conventions |
 | G | done | CLI (cobra), reporters (text/json/github), MCP server, GitHub Action |
-| H | planned | Community golden paths, goreleaser, signed releases |
+| H | done | Community golden paths, goreleaser, cosign-signed releases, SBOM |
 
 ---
 
