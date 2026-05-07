@@ -1,0 +1,47 @@
+name: InfraGenie Review
+
+on:
+  pull_request:
+    paths:
+      - "**.yaml"
+      - "**.yml"
+      - "**.tf"
+      - "Dockerfile*"
+      - "**.go"
+
+jobs:
+  review:
+    name: Golden Path review
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.21"
+
+      - name: Install infragenie
+        run: go install github.com/basebandit/infragenie/cmd/infragenie@latest
+
+      - name: Install scanners
+        run: |
+          pip install checkov
+          brew install hadolint || true
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+
+      - name: Review PR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          infragenie review \
+            --goldenpath goldenpath.yml \
+            --pr "${{ github.repository }}#${{ github.event.pull_request.number }}" \
+            --provider anthropic \
+            --format github \
+            --fail-on high
