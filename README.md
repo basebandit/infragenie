@@ -97,12 +97,6 @@ ignore:
 
 Download from the [releases page](https://github.com/basebandit/infragenie/releases). Each release ships with checksums, cosign signatures, and an SBOM.
 
-**Homebrew (macOS/Linux):**
-
-```bash
-brew install basebandit/tap/infragenie
-```
-
 **Go install:**
 
 ```bash

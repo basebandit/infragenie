@@ -87,19 +87,3 @@ changelog:
       order: 2
     - title: Other
       order: 999
-
-brews:
-  - name: infragenie
-    homepage: "https://github.com/basebandit/infragenie"
-    description: "Golden Path enforcement — review PRs and generate conformant services"
-    license: "MIT"
-    repository:
-      owner: basebandit
-      name: homebrew-tap
-    commit_author:
-      name: evanson
-      email: evansonmwangi83@gmail.com
-    install: |
-      bin.install "infragenie"
-    test: |
-      system "#{bin}/infragenie", "version"
