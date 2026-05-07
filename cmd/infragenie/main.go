@@ -26,6 +26,7 @@ Codify standards once in goldenpath.yml, then:
   generate — scaffold new services that are correct from day one`,
 		SilenceUsage: true,
 	}
+	root.AddCommand(initCmd())
 	root.AddCommand(reviewCmd())
 	root.AddCommand(mcpCmd())
 	root.AddCommand(&cobra.Command{

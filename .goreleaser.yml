@@ -1,0 +1,105 @@
+version: 2
+
+project_name: infragenie
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+
+builds:
+  - id: infragenie
+    main: ./cmd/infragenie
+    binary: infragenie
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+
+archives:
+  - id: infragenie
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - README.md
+      - LICENSE
+      - examples/golden-paths/*.yml
+
+checksum:
+  name_template: "checksums.txt"
+
+sboms:
+  - artifacts: archive
+    documents:
+      - "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}.sbom.json"
+
+signs:
+  - cmd: cosign
+    env:
+      - COSIGN_EXPERIMENTAL=1
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--output-certificate=${certificate}"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: checksum
+    output: true
+
+release:
+  github:
+    owner: basebandit
+    name: infragenie
+  draft: false
+  prerelease: auto
+  name_template: "v{{.Version}}"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - Merge pull request
+      - Merge branch
+  groups:
+    - title: Features
+      regexp: "^feat"
+      order: 0
+    - title: Bug Fixes
+      regexp: "^fix"
+      order: 1
+    - title: Refactors
+      regexp: "^refactor"
+      order: 2
+    - title: Other
+      order: 999
+
+brews:
+  - name: infragenie
+    homepage: "https://github.com/basebandit/infragenie"
+    description: "Golden Path enforcement — review PRs and generate conformant services"
+    license: "MIT"
+    repository:
+      owner: basebandit
+      name: homebrew-tap
+    commit_author:
+      name: evanson
+      email: evansonmwangi83@gmail.com
+    install: |
+      bin.install "infragenie"
+    test: |
+      system "#{bin}/infragenie", "version"
