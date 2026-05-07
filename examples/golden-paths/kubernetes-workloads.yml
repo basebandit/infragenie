@@ -1,0 +1,100 @@
+# kubernetes-workloads.yml
+#
+# Golden Path for teams running production microservices on Kubernetes.
+# Extends the platform baseline and adds network isolation, cost-centre
+# labelling, and Helm validation to the CI pipeline.
+#
+# Typical adopters: backend service teams, API teams, data platform teams.
+
+version: 1
+name: kubernetes-workloads
+extends: ./platform-baseline.yml
+
+stacks:
+  platforms:
+    - kubernetes
+    - helm
+  cloud:
+    - aws
+    - gcp
+    - azure
+
+# Add cost-centre so FinOps tooling can allocate spend per team.
+required_labels:
+  - app.kubernetes.io/name
+  - app.kubernetes.io/version
+  - app.kubernetes.io/component
+  - team
+  - cost-centre
+
+chart_shape:
+  charts_dir: charts
+  required_files:
+    - Chart.yaml
+    - values.yaml
+    - values-prod.yaml  # production overrides must be explicit
+
+security:
+  forbid_image_tag_latest: true
+  require_non_root: true
+  require_read_only_rootfs: true
+  require_network_policy: true   # every workload must have a NetworkPolicy
+
+observability:
+  require_prometheus_annotations: true
+
+ci_required_steps:
+  - name: unit-tests
+    matches:
+      - "go test"
+      - "pytest"
+      - "npm test"
+      - "yarn test"
+  - name: vulnerability-scan
+    matches:
+      - "aquasec/trivy"
+      - "trivy image"
+      - "grype"
+  - name: helm-lint
+    matches:
+      - "helm lint"
+      - "helm template"
+  - name: k8s-validate
+    matches:
+      - "kubeval"
+      - "kube-score"
+      - "kubeconform"
+      - "pluto"
+
+runtime_rules:
+  require-owner-annotation:
+    pattern: "owner:"
+    message: "manifest is missing an owner annotation"
+    suggestion: "Add `owner: <team-name>` to metadata.annotations."
+  require-pdb:
+    pattern: "PodDisruptionBudget"
+    message: "no PodDisruptionBudget found — workload has no disruption protection"
+    suggestion: "Add a PodDisruptionBudget with minAvailable >= 1 for production workloads."
+
+# Escalate missing network policy to critical for this track.
+rules:
+  goldenpath.security.require-network-policy:
+    severity: critical
+
+defaults:
+  fail_on: high
+  budget:
+    tokens: 75000
+    usd: 0.75
+  reviewers:
+    goldenpath: true
+    reliability: true
+    conventions: true
+
+ignore:
+  - path: examples/**
+    rules: ["*"]
+  - path: charts/legacy/**
+    rules:
+      - "goldenpath.security.require-read-only-rootfs"
+      - "goldenpath.security.require-non-root"
