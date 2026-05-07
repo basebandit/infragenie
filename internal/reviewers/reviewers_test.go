@@ -1,0 +1,192 @@
+package reviewers
+
+import (
+	"context"
+	"strings"
+	"testing"
+
+	"github.com/basebandit/infragenie/pkg/models"
+	"github.com/stretchr/testify/require"
+)
+
+const deployBase = `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payments
+  labels:
+    app: payments
+spec:
+  replicas: 2
+  template:
+    spec:
+      containers:
+      - name: payments
+        image: payments:1.2.3
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+          requests:
+            cpu: "250m"
+            memory: "128Mi"
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+`
+
+func makeInput(path, content string, gp *models.GoldenPath) ReviewInput {
+	return ReviewInput{
+		Diff: &models.Diff{Files: []models.FileDiff{
+			{Path: path, Status: "added", NewContent: content},
+		}},
+		GoldenPath: gp,
+	}
+}
+
+// ── GoldenPathReviewer ────────────────────────────────────────────────────────
+
+func TestGoldenPath_RequiredLabelMissing(t *testing.T) {
+	gp := &models.GoldenPath{RequiredLabels: []string{"team", "app"}}
+	in := makeInput("charts/payments/deployment.yaml", deployBase, gp)
+	fs, err := GoldenPathReviewer{}.Review(context.Background(), in)
+	require.NoError(t, err)
+	ruleIDs := ruleIDSet(fs)
+	require.Contains(t, ruleIDs, "goldenpath.required-label")
+	// "app" IS present in deployBase labels; only "team" should be missing
+	found := findByRuleID(fs, "goldenpath.required-label")
+	require.Len(t, found, 1)
+	require.Contains(t, found[0].Title, "team")
+}
+
+func TestGoldenPath_NoFindingsOnCleanManifest(t *testing.T) {
+	clean := deployBase + "    team: platform\n"
+	gp := &models.GoldenPath{RequiredLabels: []string{"app"}}
+	in := makeInput("deploy.yaml", clean, gp)
+	fs, err := GoldenPathReviewer{}.Review(context.Background(), in)
+	require.NoError(t, err)
+	require.Empty(t, findByRuleID(fs, "goldenpath.required-label"))
+}
+
+func TestGoldenPath_LatestTagFlagged(t *testing.T) {
+	content := strings.ReplaceAll(deployBase, "payments:1.2.3", "payments:latest")
+	gp := &models.GoldenPath{Security: models.Security{ForbidImageTagLatest: true}}
+	in := makeInput("deploy.yaml", content, gp)
+	fs, err := GoldenPathReviewer{}.Review(context.Background(), in)
+	require.NoError(t, err)
+	require.NotEmpty(t, findByRuleID(fs, "goldenpath.security.no-latest-tag"))
+}
+
+func TestGoldenPath_PrometheusMissing(t *testing.T) {
+	gp := &models.GoldenPath{Observability: models.Observability{RequirePrometheusAnnotations: true}}
+	in := makeInput("deploy.yaml", deployBase, gp)
+	fs, err := GoldenPathReviewer{}.Review(context.Background(), in)
+	require.NoError(t, err)
+	require.NotEmpty(t, findByRuleID(fs, "goldenpath.observability.prometheus-annotations"))
+}
+
+func TestGoldenPath_CIStepMissing(t *testing.T) {
+	ciContent := "steps:\n  - name: build\n    run: go build\n"
+	gp := &models.GoldenPath{CIRequired: []models.CIStep{
+		{Name: "trivy-scan", Matches: []string{"trivy", "aquasec/trivy"}},
+	}}
+	in := makeInput(".github/workflows/ci.yml", ciContent, gp)
+	fs, err := GoldenPathReviewer{}.Review(context.Background(), in)
+	require.NoError(t, err)
+	require.NotEmpty(t, findByRuleID(fs, "goldenpath.ci.required-step"))
+}
+
+func TestGoldenPath_NilGoldenPathIsNoop(t *testing.T) {
+	in := makeInput("deploy.yaml", deployBase, nil)
+	fs, err := GoldenPathReviewer{}.Review(context.Background(), in)
+	require.NoError(t, err)
+	require.Empty(t, fs)
+}
+
+// ── ReliabilityReviewer ───────────────────────────────────────────────────────
+
+func TestReliability_CleanManifestNoFindings(t *testing.T) {
+	in := makeInput("deploy.yaml", deployBase, nil)
+	fs, err := ReliabilityReviewer{}.Review(context.Background(), in)
+	require.NoError(t, err)
+	require.Empty(t, fs)
+}
+
+func TestReliability_MissingResourceLimits(t *testing.T) {
+	content := strings.ReplaceAll(deployBase, "          limits:\n            cpu: \"500m\"\n            memory: \"256Mi\"\n", "")
+	in := makeInput("deploy.yaml", content, nil)
+	fs, err := ReliabilityReviewer{}.Review(context.Background(), in)
+	require.NoError(t, err)
+	require.NotEmpty(t, findByRuleID(fs, "reliability.resource-limits"))
+}
+
+func TestReliability_MissingProbes(t *testing.T) {
+	content := strings.ReplaceAll(deployBase, "        livenessProbe:\n          httpGet:\n            path: /healthz\n            port: 8080\n", "")
+	in := makeInput("deploy.yaml", content, nil)
+	fs, err := ReliabilityReviewer{}.Review(context.Background(), in)
+	require.NoError(t, err)
+	require.NotEmpty(t, findByRuleID(fs, "reliability.liveness-probe"))
+}
+
+func TestReliability_SingleReplica(t *testing.T) {
+	content := strings.ReplaceAll(deployBase, "  replicas: 2", "  replicas: 1")
+	in := makeInput("deploy.yaml", content, nil)
+	fs, err := ReliabilityReviewer{}.Review(context.Background(), in)
+	require.NoError(t, err)
+	require.NotEmpty(t, findByRuleID(fs, "reliability.single-replica"))
+}
+
+// ── ConventionsReviewer ───────────────────────────────────────────────────────
+
+func TestConventions_LegacyAppLabelFlagged(t *testing.T) {
+	in := makeInput("deploy.yaml", deployBase, nil)
+	fs, err := ConventionsReviewer{}.Review(context.Background(), in)
+	require.NoError(t, err)
+	require.NotEmpty(t, findByRuleID(fs, "conventions.app-kubernetes-io-labels"))
+}
+
+func TestConventions_WellKnownLabelsClean(t *testing.T) {
+	content := strings.ReplaceAll(deployBase, "    app: payments", "    app.kubernetes.io/name: payments")
+	in := makeInput("deploy.yaml", content, nil)
+	fs, err := ConventionsReviewer{}.Review(context.Background(), in)
+	require.NoError(t, err)
+	require.Empty(t, findByRuleID(fs, "conventions.app-kubernetes-io-labels"))
+}
+
+func TestConventions_RuntimeRuleViolation(t *testing.T) {
+	gp := &models.GoldenPath{RuntimeRules: map[string]map[string]any{
+		"require-owner-annotation": {
+			"pattern":    "owner:",
+			"message":    "owner annotation required",
+			"suggestion": "Add `owner: <team>` to metadata.annotations.",
+		},
+	}}
+	in := makeInput("deploy.yaml", deployBase, gp)
+	fs, err := ConventionsReviewer{}.Review(context.Background(), in)
+	require.NoError(t, err)
+	require.NotEmpty(t, findByRuleID(fs, "conventions.runtime-rule.require-owner-annotation"))
+}
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+func ruleIDSet(fs []models.Finding) map[string]bool {
+	m := map[string]bool{}
+	for _, f := range fs {
+		m[f.RuleID] = true
+	}
+	return m
+}
+
+func findByRuleID(fs []models.Finding, id string) []models.Finding {
+	var out []models.Finding
+	for _, f := range fs {
+		if f.RuleID == id {
+			out = append(out, f)
+		}
+	}
+	return out
+}
