@@ -91,6 +91,30 @@ ignore:
 
 ---
 
+## Installation
+
+```bash
+go install github.com/basebandit/infragenie/cmd/infragenie@latest
+```
+
+Or build from source:
+
+```bash
+git clone https://github.com/basebandit/infragenie
+cd infragenie
+go build -o infragenie ./cmd/infragenie
+```
+
+**Scanner dependencies** (install whichever apply to your stack):
+
+```bash
+pip install checkov
+brew install hadolint
+go install github.com/securego/gosec/v2/cmd/gosec@latest
+```
+
+---
+
 ## Quick start
 
 ```bash
@@ -100,33 +124,108 @@ infragenie review --goldenpath goldenpath.yml --diff HEAD~1
 # Review a GitHub PR
 infragenie review --goldenpath goldenpath.yml --pr owner/repo#42
 
-# Generate a new service from a template
-infragenie generate --goldenpath goldenpath.yml --template go-service --name payments
+# Review a GitHub PR with LLM grounding (explains why each finding matters)
+infragenie review \
+  --goldenpath goldenpath.yml \
+  --pr owner/repo#42 \
+  --provider anthropic \
+  --budget-tokens 50000 \
+  --format github
+
+# Start the MCP server (for LLM assistant integration)
+infragenie mcp
 ```
 
-> CLI surface is landing in Phase G. The engine, scanners, reviewers, grounding layer, and telemetry are complete and tested.
+### Output formats
+
+| Format | Use case |
+|--------|----------|
+| `text` (default) | Terminal — human-readable with explanations and fix suggestions |
+| `json` | Machine-readable — pipe to jq, scripts, dashboards |
+| `github` | GitHub Actions — inline PR annotations via workflow commands |
+
+### CLI flags (`review`)
+
+```
+--goldenpath, -g   path to goldenpath.yml
+--diff, -d         local git ref (e.g. HEAD~1, main)
+--pr               GitHub PR: owner/repo#N or full URL
+--provider         LLM provider for grounding: anthropic, openai, local
+--model            LLM model (provider default used if omitted)
+--format, -f       output format: text, json, github  (default: text)
+--fail-on          exit 1 at this severity or above (default: high)
+--budget-tokens    max tokens per run (default: unlimited)
+--budget-usd       max USD per run (default: unlimited)
+--no-ground        skip LLM grounding pass entirely
+--github-token     GitHub token (default: $GITHUB_TOKEN)
+```
+
+---
+
+## MCP server
+
+InfraGenie exposes a [Model Context Protocol](https://modelcontextprotocol.io) server so LLM assistants (Claude, Cursor, etc.) can call it as a tool.
+
+Add to your MCP client config:
+
+```json
+{
+  "mcpServers": {
+    "infragenie": {
+      "command": "infragenie",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+Available tools:
+
+| Tool | Description |
+|------|-------------|
+| `review_diff` | Review a raw unified diff string. Accepts optional `goldenpath_path`. |
+| `review_pr` | Fetch and review a GitHub PR by `owner/repo#N`. Accepts optional `goldenpath_path` and `github_token`. |
+
+Both tools return findings as JSON or text depending on the `format` argument.
+
+---
+
+## GitHub Actions
+
+Drop the example workflow into `.github/workflows/`:
+
+```bash
+cp examples/github-action/infragenie-review.yml .github/workflows/
+```
+
+Findings appear as inline PR annotations. Set `--fail-on high` to block merges on high-severity violations.
+
+Required secrets: `GITHUB_TOKEN` (automatic), `ANTHROPIC_API_KEY` (for grounding).
 
 ---
 
 ## Architecture
 
 ```
-infragenie/
-├── internal/
-│   ├── engine/          # Orchestrates all three review layers
-│   ├── goldenpath/      # goldenpath.yml loader, validation, extends resolution
-│   ├── diff/            # Unified diff parser; local and GitHub PR sources
-│   ├── repo/            # Repo context: language, platform, CI detection
-│   ├── scanners/
-│   │   ├── infra/       # checkov, hadolint adapters
-│   │   └── lang/        # gosec adapter
-│   ├── grounding/       # LLM grounding pass with sha256 cache
-│   ├── reviewers/       # Golden Path, reliability, conventions reviewers
-│   ├── llm/             # Multi-provider LLM client (Anthropic, OpenAI, Ollama, …)
-│   ├── telemetry/       # Prometheus metrics, spend ledger, OTLP tracing, budget gate
-│   └── eval/            # Eval harness with precision/recall gates
-└── pkg/
-    └── models/          # Shared types: Finding, Diff, GoldenPath, Severity
+cmd/
+└── infragenie/          # CLI entry point (cobra) — review, mcp, version
+internal/
+├── engine/              # Orchestrates all three review layers
+├── goldenpath/          # goldenpath.yml loader, validation, extends resolution
+├── diff/                # Unified diff parser; local and GitHub PR sources
+├── repo/                # Repo context: language, platform, CI detection
+├── scanners/
+│   ├── infra/           # checkov, hadolint adapters
+│   └── lang/            # gosec adapter
+├── grounding/           # LLM grounding pass with sha256 cache
+├── reviewers/           # Golden Path, reliability, conventions reviewers
+├── llm/                 # Multi-provider LLM client (Anthropic, OpenAI, Ollama, …)
+├── mcp/                 # MCP server — review_diff and review_pr tools
+├── reporter/            # Output formatters: text, JSON, GitHub annotations
+├── telemetry/           # Prometheus metrics, spend ledger, OTLP tracing, budget gate
+└── eval/                # Eval harness with precision/recall gates
+pkg/
+└── models/              # Shared types: Finding, Diff, GoldenPath, Severity
 ```
 
 ---
@@ -172,6 +271,7 @@ go test ./...
 |----------|---------|
 | `ANTHROPIC_API_KEY` | Anthropic API key for grounding/reviewers |
 | `OPENAI_API_KEY` | OpenAI API key (alternative) |
+| `GITHUB_TOKEN` | GitHub token for PR review (`--pr` flag) |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | Enable OTLP trace export |
 
 ---
@@ -186,7 +286,7 @@ go test ./...
 | D | done | LLM grounder with cache, eval harness |
 | E | done | Telemetry ledger, Prometheus metrics, OTLP tracer, budget gate |
 | F | done | Layer-3 reviewers: golden path, reliability, conventions |
-| G | in progress | CLI (cobra), reporters, MCP server, GitHub Action |
+| G | done | CLI (cobra), reporters (text/json/github), MCP server, GitHub Action |
 | H | planned | Community golden paths, goreleaser, signed releases |
 
 ---
