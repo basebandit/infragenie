@@ -102,8 +102,10 @@ ci_required_steps:
     matches: %s
   - name: vulnerability-scan
     matches:
+      - "aquasecurity/trivy-action"
       - "aquasec/trivy"
       - "trivy image"
+      - "trivy fs"
       - "grype"
 
 runtime_rules:
@@ -168,8 +170,10 @@ ci_required_steps:
     matches: %s
   - name: vulnerability-scan
     matches:
+      - "aquasecurity/trivy-action"
       - "aquasec/trivy"
       - "trivy image"
+      - "trivy fs"
       - "grype"
   - name: helm-lint
     matches:
