@@ -89,12 +89,22 @@ func newAnthropicProvider(cfg Config) (*anthropicProvider, error) {
 	}, nil
 }
 
+type anthropicSystemBlock struct {
+	Type         string              `json:"type"`
+	Text         string              `json:"text"`
+	CacheControl *anthropicCacheCtrl `json:"cache_control,omitempty"`
+}
+
+type anthropicCacheCtrl struct {
+	Type string `json:"type"`
+}
+
 type anthropicReq struct {
-	Model       string             `json:"model"`
-	MaxTokens   int                `json:"max_tokens"`
-	Temperature float32            `json:"temperature"`
-	System      string             `json:"system,omitempty"`
-	Messages    []anthropicMessage `json:"messages"`
+	Model       string                  `json:"model"`
+	MaxTokens   int                     `json:"max_tokens"`
+	Temperature float32                 `json:"temperature"`
+	System      []anthropicSystemBlock  `json:"system,omitempty"`
+	Messages    []anthropicMessage      `json:"messages"`
 }
 
 type anthropicMessage struct {
@@ -106,14 +116,27 @@ type anthropicResp struct {
 	Content []struct {
 		Text string `json:"text"`
 	} `json:"content"`
+	Usage struct {
+		InputTokens              int `json:"input_tokens"`
+		OutputTokens             int `json:"output_tokens"`
+		CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+		CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+	} `json:"usage"`
 }
 
 func (p *anthropicProvider) Generate(ctx context.Context, system, user string) (string, error) {
+	// Mark the system prompt for caching — Anthropic caches prefixes ≥1024 tokens.
+	// Safe to always set; ignored silently when below threshold.
+	sysBlocks := []anthropicSystemBlock{{
+		Type:         "text",
+		Text:         system,
+		CacheControl: &anthropicCacheCtrl{Type: "ephemeral"},
+	}}
 	body, _ := json.Marshal(anthropicReq{
 		Model:       p.model,
 		MaxTokens:   p.maxTokens,
 		Temperature: p.temperature,
-		System:      system,
+		System:      sysBlocks,
 		Messages:    []anthropicMessage{{Role: "user", Content: user}},
 	})
 	req, err := http.NewRequestWithContext(ctx, "POST", "https://api.anthropic.com/v1/messages", bytes.NewReader(body))
@@ -123,6 +146,7 @@ func (p *anthropicProvider) Generate(ctx context.Context, system, user string) (
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-api-key", p.apiKey)
 	req.Header.Set("anthropic-version", "2023-06-01")
+	req.Header.Set("anthropic-beta", "prompt-caching-2024-07-31")
 
 	resp, err := p.http.Do(req)
 	if err != nil {
@@ -151,6 +175,7 @@ func (p *anthropicProvider) Available(ctx context.Context) bool {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-api-key", p.apiKey)
 	req.Header.Set("anthropic-version", "2023-06-01")
+	req.Header.Set("anthropic-beta", "prompt-caching-2024-07-31")
 	resp, err := p.http.Do(req)
 	if err != nil {
 		return false
