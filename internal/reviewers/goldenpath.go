@@ -39,7 +39,7 @@ func (GoldenPathReviewer) Review(_ context.Context, in ReviewInput) ([]models.Fi
 // checkRequiredLabels verifies that K8s manifest metadata.labels contains all
 // labels declared in the GoldenPath required_labels list.
 func checkRequiredLabels(f models.FileDiff, required []string) []models.Finding {
-	if len(required) == 0 || !isK8sManifest(f.Path) {
+	if len(required) == 0 || !isK8sManifest(f.Path) || !hasK8sAPIVersion(f.NewContent) {
 		return nil
 	}
 	var m struct {
@@ -71,7 +71,7 @@ func checkRequiredLabels(f models.FileDiff, required []string) []models.Finding 
 
 // checkSecurity enforces security rules from the GoldenPath Security block.
 func checkSecurity(f models.FileDiff, sec models.Security) []models.Finding {
-	if !isK8sManifest(f.Path) {
+	if !isK8sManifest(f.Path) || !hasK8sAPIVersion(f.NewContent) {
 		return nil
 	}
 	content := f.NewContent
@@ -232,6 +232,10 @@ func isK8sManifest(path string) bool {
 		!strings.Contains(path, ".github/") &&
 		!strings.Contains(path, ".gitlab-ci") &&
 		!strings.Contains(path, "azure-pipelines")
+}
+
+func hasK8sAPIVersion(content string) bool {
+	return strings.Contains(content, "apiVersion:")
 }
 
 func isCIFile(path string) bool {
