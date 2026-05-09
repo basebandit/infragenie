@@ -24,6 +24,17 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Test
+        run: go test -race ./...
+
+      - name: Vulnerability scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
 
