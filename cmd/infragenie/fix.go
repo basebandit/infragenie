@@ -14,15 +14,14 @@ import (
 	"github.com/basebandit/infragenie/pkg/models"
 )
 
-// runFix is called after review findings are surfaced when --fix is set.
-// It groups fixable findings by file, calls the LLM once per file,
-// shows a unified diff, and writes approved changes after user confirmation.
-func runFix(ctx context.Context, findings []models.Finding, providerName, model string) error {
-	if !isTerminal() {
-		return fmt.Errorf("--fix requires an interactive terminal; cannot run in CI or pipe mode")
+// runFix is called after review findings are surfaced when --fix or --fix-auto is set.
+// autoApprove skips the TTY check and applies all suggestions without prompting.
+func runFix(ctx context.Context, findings []models.Finding, providerName, model string, autoApprove bool) error {
+	if !autoApprove && !isTerminal() {
+		return fmt.Errorf("--fix requires an interactive terminal; use --fix-auto for CI pipelines")
 	}
 	if providerName == "" {
-		return fmt.Errorf("--fix requires --provider (e.g. --provider openai)")
+		return fmt.Errorf("--fix/--fix-auto requires --provider (e.g. --provider openai)")
 	}
 
 	client, err := llm.NewClient([]llm.Config{
@@ -79,8 +78,16 @@ func runFix(ctx context.Context, findings []models.Finding, providerName, model 
 			continue
 		}
 		fmt.Println(udiff)
-		fmt.Print("Apply? [y]es / [n]o / [s]kip all  > ")
 
+		if autoApprove {
+			if err := os.WriteFile(path, []byte(suggested), 0o644); err != nil {
+				return fmt.Errorf("write %s: %w", path, err)
+			}
+			fmt.Printf("  auto-applied → %s\n", path)
+			continue
+		}
+
+		fmt.Print("Apply? [y]es / [n]o / [s]kip all  > ")
 		if !sc.Scan() {
 			break
 		}
