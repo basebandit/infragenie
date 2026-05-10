@@ -30,6 +30,8 @@ The checklist below is about AUTHOR responsibility — did you write the right t
 
 **Author checklist — check what you did:**
 
+- [ ] **No testable logic changed** — docs/CI/config only _(check this and skip the rest of this section)_
+
 - [ ] Unit tests added or updated for new/changed behaviour
   - _Skip if this is docs-only or a refactor with no logic change_
 - [ ] Eval harness fixture added or updated
