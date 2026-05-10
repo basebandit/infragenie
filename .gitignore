@@ -20,3 +20,6 @@ goldenpath.yml
 # test artifacts
 coverage.out
 *.test
+
+# Claude Code internal
+.claude/
