@@ -22,7 +22,10 @@ jobs:
         run: make build
 
       - name: Test
-        run: make test
+        run: go test -race -coverprofile=coverage.out ./...
+
+      - name: Eval harness
+        run: go test -race -v ./internal/eval/... -run TestFixtureCorpus
 
       - name: Upload coverage
         uses: actions/upload-artifact@v4

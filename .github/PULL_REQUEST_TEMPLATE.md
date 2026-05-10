@@ -23,26 +23,33 @@ Closes #
 
 ## Testing
 
-<!-- How was this tested? Check what applies and describe anything non-standard. -->
+<!--
+CI runs automatically: build · go test -race ./... · eval harness (TestFixtureCorpus) · lint · secret scan.
+The checklist below is about AUTHOR responsibility — did you write the right tests, not just did they pass.
+-->
 
-- [ ] Unit tests added / updated (`go test ./...` passes)
-- [ ] Eval harness fixture added / updated (`go test ./internal/eval/...` passes)
-- [ ] Integration tested locally (describe setup below if needed)
-- [ ] Manual smoke test — `infragenie review --diff HEAD~1` ran cleanly
+**Author checklist — check what you did:**
+
+- [ ] Unit tests added or updated for new/changed behaviour
+  - _Skip if this is docs-only or a refactor with no logic change_
+- [ ] Eval harness fixture added or updated
+  - _Required when changing scanner adapters, grounding prompts, or reviewer logic_
+  - _See `internal/eval/README.md` for how to write a fixture_
+- [ ] Manually ran `infragenie review` against a real diff and output looked correct
 
 ```bash
-# Smoke check (adjust for your change — delete if not applicable)
-# Config / env resolution
-cp examples/config.yml ~/.config/infragenie/config.yml
+# Adjust for your change — delete block if not applicable
+make build
 infragenie review --goldenpath goldenpath.yml --diff HEAD~1
 
-# Env var override
+# For config / env changes
+cp examples/config.yml ~/.config/infragenie/config.yml
 export INFRAGENIE_PROVIDER=openai
 infragenie review --goldenpath goldenpath.yml --diff HEAD~1
-
-# Confirm no secrets leaked into git
-git status  # .env.local must not appear
 ```
+
+- [ ] Integration tested locally if the change touches LLM calls, scanner exec, or external APIs
+  - _Describe non-obvious setup below_
 
 ## Breaking changes
 
@@ -55,7 +62,7 @@ git status  # .env.local must not appear
 ## Checklist
 
 > CI enforced automatically — no need to check these manually:
-> `make build` · `make test -race` · `golangci-lint` · secret scan · conventional commit messages
+> `make build` · `go test -race ./...` · eval harness (`TestFixtureCorpus`) · `golangci-lint` · secret scan · conventional commit messages
 
 - [ ] Public API / CLI flags documented in README or relevant doc
 - [ ] No unintentional behaviour change in existing commands
