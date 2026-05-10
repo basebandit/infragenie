@@ -54,9 +54,8 @@ git status  # .env.local must not appear
 
 ## Checklist
 
-- [ ] `make build` passes
-- [ ] `make test` passes (race detector on)
-- [ ] `make lint` passes (or failures are pre-existing and noted)
-- [ ] No secrets, credentials, or `.env.local` committed
+> CI enforced automatically — no need to check these manually:
+> `make build` · `make test -race` · `golangci-lint` · secret scan · conventional commit messages
+
 - [ ] Public API / CLI flags documented in README or relevant doc
-- [ ] Commit messages are one-liners in imperative mood (`feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`)
+- [ ] No unintentional behaviour change in existing commands
