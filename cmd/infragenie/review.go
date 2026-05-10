@@ -113,15 +113,16 @@ func reviewCmd(appCfg **config.AppConfig) *cobra.Command {
 			}
 
 			// ── grounder ──────────────────────────────────────────────────────
+			apiKey := cfg.APIKey(providerName)
+			resolvedModel := model
+			if resolvedModel == "" {
+				resolvedModel = cfg.Model(providerName)
+			}
+			baseURL := cfg.BaseURL(providerName)
 			var grounder grounding.Grounder
 			if !noGround && providerName != "" {
-				apiKey := cfg.APIKey(providerName)
-				resolvedModel := model
-				if resolvedModel == "" {
-					resolvedModel = cfg.Model(providerName)
-				}
 				client, err := llm.NewClient([]llm.Config{
-					{Provider: llm.Provider(providerName), APIKey: apiKey, Model: resolvedModel},
+					{Provider: llm.Provider(providerName), APIKey: apiKey, Model: resolvedModel, BaseURL: baseURL},
 				})
 				if err == nil {
 					grounder = grounding.NewLLMGrounder(client, resolvedModel)
@@ -166,12 +167,12 @@ func reviewCmd(appCfg **config.AppConfig) *cobra.Command {
 
 			// ── human-in-the-loop fix suggestions ─────────────────────────────
 			if (fix || fixAuto) && len(result.Findings) > 0 {
-				if err := runFix(ctx, result.Findings, providerName, model, fixAuto); err != nil {
+				if err := runFix(ctx, result.Findings, providerName, apiKey, resolvedModel, fixAuto); err != nil {
 					fmt.Fprintf(os.Stderr, "fix: %v\n", err)
 				}
 			}
 
-			os.Exit(reporter.ExitCode(result.Findings, failOnSeverity(failOn, gp)))
+			os.Exit(reporter.ExitCode(result.Findings, failOnSeverity(failOn, gp, cfg)))
 			return nil
 		},
 	}
@@ -194,9 +195,14 @@ func reviewCmd(appCfg **config.AppConfig) *cobra.Command {
 }
 
 
-func failOnSeverity(flag string, gp *models.GoldenPath) models.Severity {
+func failOnSeverity(flag string, gp *models.GoldenPath, cfg *config.AppConfig) models.Severity {
 	if flag != "" {
 		return models.Severity(flag)
+	}
+	if cfg != nil {
+		if d := cfg.DefaultFailOn(); d != "" {
+			return models.Severity(d)
+		}
 	}
 	if gp != nil && gp.FailOn != "" {
 		return gp.FailOn

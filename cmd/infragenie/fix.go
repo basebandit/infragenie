@@ -16,7 +16,7 @@ import (
 
 // runFix is called after review findings are surfaced when --fix or --fix-auto is set.
 // autoApprove skips the TTY check and applies all suggestions without prompting.
-func runFix(ctx context.Context, findings []models.Finding, providerName, model string, autoApprove bool) error {
+func runFix(ctx context.Context, findings []models.Finding, providerName, apiKey, model string, autoApprove bool) error {
 	if !autoApprove && !isTerminal() {
 		return fmt.Errorf("--fix requires an interactive terminal; use --fix-auto for CI pipelines")
 	}
@@ -25,7 +25,7 @@ func runFix(ctx context.Context, findings []models.Finding, providerName, model 
 	}
 
 	client, err := llm.NewClient([]llm.Config{
-		{Provider: llm.Provider(providerName), APIKey: apiKeyForProvider(providerName), Model: model},
+		{Provider: llm.Provider(providerName), APIKey: apiKey, Model: model},
 	})
 	if err != nil {
 		return fmt.Errorf("fix: %w", err)
