@@ -1,0 +1,22 @@
+# binaries
+bin/
+dist/
+
+# secrets — never commit these
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# generated at runtime
+goldenpath.yml
+
+# editor and OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# test artifacts
+coverage.out
+*.test

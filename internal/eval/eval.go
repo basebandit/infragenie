@@ -5,6 +5,7 @@ package eval
 
 import "github.com/basebandit/infragenie/pkg/models"
 
+// Expected is one entry in a fixture file: the finding the engine must produce.
 type Expected struct {
 	RuleID   string `json:"rule_id"`
 	File     string `json:"file"`
@@ -12,14 +13,16 @@ type Expected struct {
 	Severity string `json:"severity,omitempty"`
 }
 
+// Metrics holds confusion-matrix counts for a single fixture or an aggregated run.
 type Metrics struct {
-	TP int
-	FP int
-	FN int
+	TP int // true positives  — expected finding was produced
+	FP int // false positives — produced finding had no matching expectation
+	FN int // false negatives — expected finding was not produced
 }
 
 func (m Metrics) Precision() float64 {
 	if m.TP+m.FP == 0 {
+		// No predictions made; treat as perfect to avoid penalising empty output.
 		return 1.0
 	}
 	return float64(m.TP) / float64(m.TP+m.FP)
@@ -27,6 +30,7 @@ func (m Metrics) Precision() float64 {
 
 func (m Metrics) Recall() float64 {
 	if m.TP+m.FN == 0 {
+		// No expected findings; nothing to miss, so recall is perfect.
 		return 1.0
 	}
 	return float64(m.TP) / float64(m.TP+m.FN)
@@ -53,6 +57,7 @@ func Sum(ms ...Metrics) Metrics {
 
 // Match scores actual findings against expected. Two findings match when
 // they share rule_id and file and have lines within tolerance.
+// Matching is greedy: each actual finding is consumed at most once (first match wins).
 func Match(expected []Expected, actual []models.Finding, lineTolerance int) Metrics {
 	used := make([]bool, len(actual))
 	var m Metrics
