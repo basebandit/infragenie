@@ -34,6 +34,7 @@ func reviewCmd() *cobra.Command {
 		budgetTokens int
 		budgetUSD    float64
 		noGround     bool
+		fix          bool
 	)
 
 	cmd := &cobra.Command{
@@ -140,6 +141,13 @@ func reviewCmd() *cobra.Command {
 				return err
 			}
 
+			// ── human-in-the-loop fix suggestions ─────────────────────────────
+			if fix && len(result.Findings) > 0 {
+				if err := runFix(ctx, result.Findings, providerName, model); err != nil {
+					fmt.Fprintf(os.Stderr, "fix: %v\n", err)
+				}
+			}
+
 			os.Exit(reporter.ExitCode(result.Findings, failOnSeverity(failOn, gp)))
 			return nil
 		},
@@ -156,6 +164,7 @@ func reviewCmd() *cobra.Command {
 	cmd.Flags().IntVar(&budgetTokens, "budget-tokens", 0, "max tokens to spend on grounding (0 = unlimited)")
 	cmd.Flags().Float64Var(&budgetUSD, "budget-usd", 0, "max USD to spend on grounding (0 = unlimited)")
 	cmd.Flags().BoolVar(&noGround, "no-ground", false, "skip LLM grounding pass")
+	cmd.Flags().BoolVar(&fix, "fix", false, "interactively apply LLM-suggested fixes for auto-fixable findings (requires --provider)")
 
 	return cmd
 }
