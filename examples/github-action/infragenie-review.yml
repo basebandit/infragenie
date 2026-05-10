@@ -31,17 +31,42 @@ jobs:
       - name: Install scanners
         run: |
           pip install checkov
-          brew install hadolint || true
+          wget -qO /usr/local/bin/hadolint \
+            https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64
+          chmod +x /usr/local/bin/hadolint
           go install github.com/securego/gosec/v2/cmd/gosec@latest
 
       - name: Review PR
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Optional: override provider/model without changing goldenpath.yml
+          # INFRAGENIE_PROVIDER: anthropic
+          # ANTHROPIC_MODEL: claude-3-5-haiku-20241022
+          # INFRAGENIE_FAIL_ON: high
         run: |
           infragenie review \
             --goldenpath goldenpath.yml \
             --pr "${{ github.repository }}#${{ github.event.pull_request.number }}" \
             --provider anthropic \
             --format github \
-            --fail-on high
+            --fail-on high \
+            --budget-tokens 50000 \
+            --budget-usd 0.50
+
+      # Uncomment to auto-apply LLM-suggested fixes and commit them back to the PR branch.
+      # Requires write access to contents and the provider flag set above.
+      #
+      # - name: Auto-fix findings
+      #   env:
+      #     ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      #   run: |
+      #     infragenie review \
+      #       --goldenpath goldenpath.yml \
+      #       --pr "${{ github.repository }}#${{ github.event.pull_request.number }}" \
+      #       --provider anthropic \
+      #       --fix-auto
+      #     git config user.name  "infragenie[bot]"
+      #     git config user.email "infragenie[bot]@users.noreply.github.com"
+      #     git diff --quiet || git commit -am "fix: apply infragenie auto-fixes"
+      #     git push
