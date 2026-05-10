@@ -30,8 +30,18 @@ Closes #
 - [ ] Integration tested locally (describe setup below if needed)
 - [ ] Manual smoke test — `infragenie review --diff HEAD~1` ran cleanly
 
-```
-# paste relevant test output or command run here (optional)
+```bash
+# Smoke check (adjust for your change — delete if not applicable)
+# Config / env resolution
+cp examples/config.yml ~/.config/infragenie/config.yml
+infragenie review --goldenpath goldenpath.yml --diff HEAD~1
+
+# Env var override
+export INFRAGENIE_PROVIDER=openai
+infragenie review --goldenpath goldenpath.yml --diff HEAD~1
+
+# Confirm no secrets leaked into git
+git status  # .env.local must not appear
 ```
 
 ## Breaking changes
