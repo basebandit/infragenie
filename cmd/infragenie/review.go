@@ -95,10 +95,26 @@ func reviewCmd(appCfg **config.AppConfig) *cobra.Command {
 			}
 			selected := scanners.Select(allScanners, gp, rc)
 
+			// ── resolve config defaults (env var > config file > CLI default) ──
+			cfg := *appCfg
+			if providerName == "" {
+				providerName = cfg.DefaultProvider()
+			}
+			if format == "text" { // "text" is the cobra default, treat as unset
+				if d := cfg.DefaultFormat(); d != "" {
+					format = d
+				}
+			}
+			if budgetTokens == 0 {
+				budgetTokens = cfg.DefaultBudgetTokens()
+			}
+			if budgetUSD == 0 {
+				budgetUSD = cfg.DefaultBudgetUSD()
+			}
+
 			// ── grounder ──────────────────────────────────────────────────────
 			var grounder grounding.Grounder
 			if !noGround && providerName != "" {
-				cfg := *appCfg
 				apiKey := cfg.APIKey(providerName)
 				resolvedModel := model
 				if resolvedModel == "" {

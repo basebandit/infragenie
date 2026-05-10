@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"gopkg.in/yaml.v3"
 )
@@ -139,9 +140,12 @@ func (c *AppConfig) BaseURL(provider string) string {
 	return ""
 }
 
-// Model returns the configured model for provider, or empty string.
-// Empty means the provider's built-in default is used.
+// Model returns the resolved model for provider.
+// Lookup order: env var → config file → empty string (provider picks its default).
 func (c *AppConfig) Model(provider string) string {
+	if v := os.Getenv(modelEnvVar(provider)); v != "" {
+		return v
+	}
 	switch provider {
 	case "openai":
 		if c.Providers.OpenAI != nil {
@@ -165,6 +169,72 @@ func (c *AppConfig) Model(provider string) string {
 		}
 	}
 	return ""
+}
+
+// DefaultProvider returns the provider to use when --provider is not set.
+// Lookup order: INFRAGENIE_PROVIDER env var → config file → empty string.
+func (c *AppConfig) DefaultProvider() string {
+	if v := os.Getenv("INFRAGENIE_PROVIDER"); v != "" {
+		return v
+	}
+	return c.Providers.Default
+}
+
+// DefaultFormat returns the output format default.
+// Lookup order: INFRAGENIE_FORMAT env var → config file → empty string.
+func (c *AppConfig) DefaultFormat() string {
+	if v := os.Getenv("INFRAGENIE_FORMAT"); v != "" {
+		return v
+	}
+	return c.Defaults.Format
+}
+
+// DefaultFailOn returns the fail-on severity default.
+// Lookup order: INFRAGENIE_FAIL_ON env var → config file → empty string.
+func (c *AppConfig) DefaultFailOn() string {
+	if v := os.Getenv("INFRAGENIE_FAIL_ON"); v != "" {
+		return v
+	}
+	return c.Defaults.FailOn
+}
+
+// DefaultBudgetTokens returns the token budget default (0 = unlimited).
+// Lookup order: INFRAGENIE_BUDGET_TOKENS env var → config file → 0.
+func (c *AppConfig) DefaultBudgetTokens() int {
+	if v := os.Getenv("INFRAGENIE_BUDGET_TOKENS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	return c.Defaults.Budget.Tokens
+}
+
+// DefaultBudgetUSD returns the USD budget default (0 = unlimited).
+// Lookup order: INFRAGENIE_BUDGET_USD env var → config file → 0.
+func (c *AppConfig) DefaultBudgetUSD() float64 {
+	if v := os.Getenv("INFRAGENIE_BUDGET_USD"); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return f
+		}
+	}
+	return c.Defaults.Budget.USD
+}
+
+func modelEnvVar(provider string) string {
+	switch provider {
+	case "openai":
+		return "OPENAI_MODEL"
+	case "anthropic":
+		return "ANTHROPIC_MODEL"
+	case "google":
+		return "GOOGLE_MODEL"
+	case "azure":
+		return "AZURE_OPENAI_MODEL"
+	case "local":
+		return "LOCAL_LLM_MODEL"
+	default:
+		return ""
+	}
 }
 
 // DefaultPath returns the canonical user-level config path regardless of
