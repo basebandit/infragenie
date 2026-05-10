@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/basebandit/infragenie/pkg/config"
 	"github.com/spf13/cobra"
 )
 
@@ -16,6 +17,9 @@ func main() {
 }
 
 func rootCmd() *cobra.Command {
+	var configPath string
+	var appCfg *config.AppConfig
+
 	root := &cobra.Command{
 		Use:   "infragenie",
 		Short: "Golden Path enforcement — review PRs and generate conformant services",
@@ -25,9 +29,21 @@ Codify standards once in goldenpath.yml, then:
   review  — scan pull requests and local diffs against your Golden Path
   generate — scaffold new services that are correct from day one`,
 		SilenceUsage: true,
+		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
+			cfg, err := config.Load(configPath)
+			if err != nil {
+				return err
+			}
+			appCfg = cfg
+			return nil
+		},
 	}
+
+	root.PersistentFlags().StringVar(&configPath, "config", "",
+		"config file (default: .infragenie.yml or ~/.config/infragenie/config.yml)")
+
 	root.AddCommand(initCmd())
-	root.AddCommand(reviewCmd())
+	root.AddCommand(reviewCmd(&appCfg))
 	root.AddCommand(mcpCmd())
 	root.AddCommand(&cobra.Command{
 		Use:   "version",

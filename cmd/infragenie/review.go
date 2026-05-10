@@ -17,11 +17,12 @@ import (
 	"github.com/basebandit/infragenie/internal/scanners/infra"
 	"github.com/basebandit/infragenie/internal/scanners/lang"
 	"github.com/basebandit/infragenie/internal/telemetry"
+	"github.com/basebandit/infragenie/pkg/config"
 	"github.com/basebandit/infragenie/pkg/models"
 	"github.com/spf13/cobra"
 )
 
-func reviewCmd() *cobra.Command {
+func reviewCmd(appCfg **config.AppConfig) *cobra.Command {
 	var (
 		gpPath       string
 		diffRef      string
@@ -97,12 +98,17 @@ func reviewCmd() *cobra.Command {
 			// ── grounder ──────────────────────────────────────────────────────
 			var grounder grounding.Grounder
 			if !noGround && providerName != "" {
-				apiKey := apiKeyForProvider(providerName)
+				cfg := *appCfg
+				apiKey := cfg.APIKey(providerName)
+				resolvedModel := model
+				if resolvedModel == "" {
+					resolvedModel = cfg.Model(providerName)
+				}
 				client, err := llm.NewClient([]llm.Config{
-					{Provider: llm.Provider(providerName), APIKey: apiKey, Model: model},
+					{Provider: llm.Provider(providerName), APIKey: apiKey, Model: resolvedModel},
 				})
 				if err == nil {
-					grounder = grounding.NewLLMGrounder(client, model)
+					grounder = grounding.NewLLMGrounder(client, resolvedModel)
 				}
 			}
 
@@ -171,16 +177,6 @@ func reviewCmd() *cobra.Command {
 	return cmd
 }
 
-func apiKeyForProvider(provider string) string {
-	switch provider {
-	case "anthropic":
-		return os.Getenv("ANTHROPIC_API_KEY")
-	case "openai":
-		return os.Getenv("OPENAI_API_KEY")
-	default:
-		return ""
-	}
-}
 
 func failOnSeverity(flag string, gp *models.GoldenPath) models.Severity {
 	if flag != "" {
