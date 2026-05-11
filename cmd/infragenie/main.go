@@ -44,6 +44,7 @@ Codify standards once in goldenpath.yml, then:
 
 	root.AddCommand(initCmd())
 	root.AddCommand(reviewCmd(&appCfg))
+	root.AddCommand(scannersCmd())
 	root.AddCommand(mcpCmd())
 	root.AddCommand(&cobra.Command{
 		Use:   "version",

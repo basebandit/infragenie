@@ -5,6 +5,7 @@ type GoldenPath struct {
 	Name    string `yaml:"name,omitempty"`
 	Extends string `yaml:"extends,omitempty"`
 
+	Scanners       ScannerConfig             `yaml:"scanners,omitempty"`
 	Stacks         Stacks                    `yaml:"stacks,omitempty"`
 	RequiredLabels []string                  `yaml:"required_labels,omitempty"`
 	ChartShape     ChartShape                `yaml:"chart_shape,omitempty"`
@@ -21,6 +22,14 @@ type GoldenPath struct {
 	Budget Budget                  `yaml:"budget,omitempty"`
 	Rules  map[string]RuleOverride `yaml:"rules,omitempty"`
 	Ignore []IgnoreRule            `yaml:"ignore,omitempty"`
+}
+
+// ScannerConfig controls which Layer-1 scanners run for this golden path.
+// Enable is an allowlist; if set, only listed scanners run (after stack-detection).
+// Disable is a blocklist applied after all other selection logic.
+type ScannerConfig struct {
+	Enable  []string `yaml:"enable,omitempty"`
+	Disable []string `yaml:"disable,omitempty"`
 }
 
 type Stacks struct {

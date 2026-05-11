@@ -141,7 +141,7 @@ func runEngine(ctx context.Context, d *models.Diff, gpPath string) (*engine.Resu
 
 	eng := engine.New(engine.Config{
 		GoldenPath: gp,
-		Scanners:   scanners.Select(all, gp, nil),
+		Scanners:   scanners.Select(all, gp, nil, nil),
 		Reviewers:  rev,
 	})
 	return eng.Run(ctx, engine.Input{Diff: d})
