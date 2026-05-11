@@ -14,8 +14,6 @@ import (
 	"github.com/basebandit/infragenie/internal/repo"
 	"github.com/basebandit/infragenie/internal/reviewers"
 	"github.com/basebandit/infragenie/internal/scanners"
-	"github.com/basebandit/infragenie/internal/scanners/infra"
-	"github.com/basebandit/infragenie/internal/scanners/lang"
 	"github.com/basebandit/infragenie/internal/telemetry"
 	"github.com/basebandit/infragenie/pkg/config"
 	"github.com/basebandit/infragenie/pkg/models"
@@ -24,19 +22,20 @@ import (
 
 func reviewCmd(appCfg **config.AppConfig) *cobra.Command {
 	var (
-		gpPath       string
-		diffRef      string
-		prTarget     string
-		githubToken  string
-		providerName string
-		model        string
-		format       string
-		failOn       string
-		budgetTokens int
-		budgetUSD    float64
-		noGround     bool
-		fix          bool
-		fixAuto      bool
+		gpPath          string
+		diffRef         string
+		prTarget        string
+		githubToken     string
+		providerName    string
+		model           string
+		format          string
+		failOn          string
+		budgetTokens    int
+		budgetUSD       float64
+		noGround        bool
+		fix             bool
+		fixAuto         bool
+		scannerOverride []string
 	)
 
 	cmd := &cobra.Command{
@@ -88,13 +87,7 @@ func reviewCmd(appCfg **config.AppConfig) *cobra.Command {
 			rc, _ := repo.Build(".")
 
 			// ── scanners ──────────────────────────────────────────────────────
-			allScanners := []scanners.Scanner{
-				infra.NewCheckov(),
-				infra.NewHadolint(),
-				lang.NewGosec(),
-				lang.NewSemgrep(),
-			}
-			selected := scanners.Select(allScanners, gp, rc)
+			selected := scanners.Select(allScanners(), gp, rc, scannerOverride)
 
 			// ── resolve config defaults (env var > config file > CLI default) ──
 			cfg := *appCfg
@@ -191,6 +184,7 @@ func reviewCmd(appCfg **config.AppConfig) *cobra.Command {
 	cmd.Flags().BoolVar(&noGround, "no-ground", false, "skip LLM grounding pass")
 	cmd.Flags().BoolVar(&fix, "fix", false, "interactively apply LLM-suggested fixes for auto-fixable findings (requires --provider)")
 	cmd.Flags().BoolVar(&fixAuto, "fix-auto", false, "apply all LLM-suggested fixes without prompting — for CI pipelines (requires --provider)")
+	cmd.Flags().StringSliceVar(&scannerOverride, "scanner", nil, "run only these scanners, comma-separated or repeated (e.g. --scanner checkov,semgrep)")
 
 	return cmd
 }
