@@ -28,7 +28,7 @@ jobs:
         run: go test -race ./...
 
       - name: Vulnerability scan
-        uses: aquasecurity/trivy-action@v0.28.0
+        uses: aquasecurity/trivy-action@75c4dc0f45c5d7ffd05ae26df1e0c666787bdf2a
         with:
           scan-type: fs
           scan-ref: .
