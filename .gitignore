@@ -20,3 +20,6 @@ goldenpath.yml
 # test artifacts
 coverage.out
 *.test
+
+# tool caches written during CI (trivy, etc.)
+.cache/
