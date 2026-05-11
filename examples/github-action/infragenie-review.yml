@@ -30,7 +30,7 @@ jobs:
 
       - name: Install scanners
         run: |
-          pip install checkov
+          pip install checkov semgrep
           wget -qO /usr/local/bin/hadolint \
             https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64
           chmod +x /usr/local/bin/hadolint

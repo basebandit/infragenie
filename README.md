@@ -116,8 +116,10 @@ make install        # installs to $GOBIN
 **Scanner dependencies** (install whichever apply to your stack):
 
 ```bash
-pip install checkov
-brew install hadolint
+pip install checkov semgrep
+wget -qO /usr/local/bin/hadolint \
+  https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64 \
+  && chmod +x /usr/local/bin/hadolint
 go install github.com/securego/gosec/v2/cmd/gosec@latest
 ```
 
@@ -241,7 +243,7 @@ internal/
 ├── repo/                # Repo context: language, platform, CI detection
 ├── scanners/
 │   ├── infra/           # checkov, hadolint adapters
-│   └── lang/            # gosec adapter
+│   └── lang/            # gosec, semgrep adapters
 ├── grounding/           # LLM grounding pass with sha256 cache
 ├── reviewers/           # Golden Path, reliability, conventions reviewers
 ├── llm/                 # Multi-provider LLM client (Anthropic, OpenAI, Ollama, …)
@@ -263,9 +265,10 @@ InfraGenie wraps best-of-breed scanners and adds the LLM grounding layer on top.
 |---------|---------------|
 | checkov | Terraform, K8s manifests, Helm, Dockerfiles |
 | hadolint | Dockerfile best practices |
-| gosec | Go source security issues |
+| semgrep | Go, Python, JS/TS, Java, Ruby, Rust, and more — community ruleset via `--config auto` |
+| gosec | Go source security issues (complements semgrep with Go-specific rules) |
 
-Scanners are stack-aware: if your repo has no Dockerfiles, hadolint is skipped automatically.
+Scanners are stack-aware: if your repo has no Dockerfiles, hadolint is skipped; if it has no source code, semgrep and gosec are skipped automatically.
 
 ---
 
