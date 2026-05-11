@@ -92,6 +92,7 @@ func reviewCmd(appCfg **config.AppConfig) *cobra.Command {
 				infra.NewCheckov(),
 				infra.NewHadolint(),
 				lang.NewGosec(),
+				lang.NewSemgrep(),
 			}
 			selected := scanners.Select(allScanners, gp, rc)
 
