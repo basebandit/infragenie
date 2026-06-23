@@ -185,11 +185,18 @@ func TestGoldenPath_CronJobSecurityEnforced(t *testing.T) {
 	require.NotEmpty(t, findByRuleID(fs, "goldenpath.security.require-readonly-rootfs"))
 }
 
-func TestGoldenPath_CronJobNetworkPolicyNotRequired(t *testing.T) {
-	// NetworkPolicy enforcement stays scoped to long-running workloads.
+func TestGoldenPath_CronJobNetworkPolicyEnforced(t *testing.T) {
+	// A batch workload with no co-located NetworkPolicy is flagged.
 	gp := &models.GoldenPath{Security: models.Security{RequireNetworkPolicy: true}}
 	in := makeInput("cronjob.yaml", cronJobSecure, gp)
 	fs, err := GoldenPathReviewer{}.Review(context.Background(), in)
+	require.NoError(t, err)
+	require.NotEmpty(t, findByRuleID(fs, "goldenpath.security.require-network-policy"))
+
+	// Co-locating a NetworkPolicy in the same file clears it.
+	withNP := cronJobSecure + "---\nkind: NetworkPolicy\n"
+	in = makeInput("cronjob.yaml", withNP, gp)
+	fs, err = GoldenPathReviewer{}.Review(context.Background(), in)
 	require.NoError(t, err)
 	require.Empty(t, findByRuleID(fs, "goldenpath.security.require-network-policy"))
 }

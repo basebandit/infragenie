@@ -121,7 +121,7 @@ func checkSecurity(f models.FileDiff, sec models.Security) []models.Finding {
 		})
 	}
 
-	if sec.RequireNetworkPolicy && isDeployment(content) && !strings.Contains(content, "kind: NetworkPolicy") {
+	if sec.RequireNetworkPolicy && isWorkload(content) && !strings.Contains(content, "kind: NetworkPolicy") {
 		findings = append(findings, models.Finding{
 			RuleID:      "goldenpath.security.require-network-policy",
 			Severity:    models.SeverityHigh,
