@@ -1,0 +1,30 @@
+# [[ .Service.Name ]]
+
+Helm chart scaffolded by `infragenie generate` from the Golden Path
+**[[ .GoldenPath.Name ]]**. Conformant by construction — `infragenie review`
+reports zero Golden Path findings against the rendered templates.
+
+## Layout
+
+| File | Purpose |
+|---|---|
+| `Chart.yaml` | Chart metadata |
+| `values.yaml` | Image, replicas, service port |
+| `templates/deployment.yaml` | Deployment + co-located NetworkPolicy (non-root, read-only rootfs, probes, resource limits, Prometheus annotations) |
+| `templates/service.yaml` | ClusterIP Service |
+| `Dockerfile` | Multi-stage, distroless, non-root |
+| `.github/workflows/ci.yml` | CI: `helm lint` + the Golden Path's required steps |
+
+## Render and install
+
+```sh
+helm lint .
+helm template . | infragenie review --goldenpath ../../goldenpath.yml --diff -
+helm install [[ .Service.Name ]] .
+```
+
+## What you still own
+
+Application code, the `Dockerfile` build stage, real CI step commands (generated
+steps are matcher placeholders), `TODO` label/annotation values, and ingress/egress
+rules beyond default DNS egress.
