@@ -5,11 +5,13 @@ package mcp
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 
 	"github.com/basebandit/infragenie/internal/diff"
 	"github.com/basebandit/infragenie/internal/engine"
+	"github.com/basebandit/infragenie/internal/generate"
 	"github.com/basebandit/infragenie/internal/goldenpath"
 	"github.com/basebandit/infragenie/internal/reporter"
 	"github.com/basebandit/infragenie/internal/reviewers"
@@ -32,6 +34,7 @@ func NewServer(version string) *server.MCPServer {
 
 	s.AddTool(reviewDiffTool(), handleReviewDiff)
 	s.AddTool(reviewPRTool(), handleReviewPR)
+	s.AddTool(generateServiceTool(), handleGenerateService)
 
 	return s
 }
@@ -69,6 +72,24 @@ func reviewPRTool() mcplib.Tool {
 			mcplib.Description("GitHub token (default: $GITHUB_TOKEN).")),
 		mcplib.WithString("format",
 			mcplib.Description("Output format: json (default) or text.")),
+	)
+}
+
+func generateServiceTool() mcplib.Tool {
+	return mcplib.NewTool("generate_service",
+		mcplib.WithDescription(
+			"Scaffold a new service that conforms to a Golden Path. Files are rendered "+
+				"deterministically from goldenpath.yml, so the result passes review with zero "+
+				"Golden Path findings. Returns the list of files created."),
+		mcplib.WithString("name",
+			mcplib.Required(),
+			mcplib.Description("Service name (DNS-1123 label, e.g. payments-api).")),
+		mcplib.WithString("template",
+			mcplib.Description("Template set to render (default: k8s-service).")),
+		mcplib.WithString("path",
+			mcplib.Description("Parent directory for the generated service (default: services).")),
+		mcplib.WithString("goldenpath_path",
+			mcplib.Description("Path to goldenpath.yml on disk (optional; secure defaults used if absent).")),
 	)
 }
 
@@ -118,6 +139,43 @@ func handleReviewPR(ctx context.Context, req mcplib.CallToolRequest) (*mcplib.Ca
 		return mcplib.NewToolResultError(err.Error()), nil
 	}
 	return mcplib.NewToolResultText(renderFindings(out, format)), nil
+}
+
+func handleGenerateService(_ context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
+	name, err := req.RequireString("name")
+	if err != nil {
+		return mcplib.NewToolResultError("name argument required"), nil
+	}
+	gpPath := req.GetString("goldenpath_path", "")
+
+	var gp *models.GoldenPath
+	if gpPath != "" {
+		loaded, lerr := goldenpath.New(".").Load(gpPath)
+		if lerr != nil {
+			return mcplib.NewToolResultError(fmt.Sprintf("goldenpath: %v", lerr)), nil
+		}
+		gp = loaded
+	}
+
+	res, err := generate.New().Run(generate.Params{
+		Name:       name,
+		Template:   req.GetString("template", ""),
+		OutDir:     req.GetString("path", ""),
+		GoldenPath: gp,
+	})
+	if err != nil {
+		return mcplib.NewToolResultError(err.Error()), nil
+	}
+
+	payload, err := json.Marshal(struct {
+		Template     string   `json:"template"`
+		Dir          string   `json:"dir"`
+		FilesCreated []string `json:"files_created"`
+	}{Template: res.Template, Dir: res.Dir, FilesCreated: res.Files})
+	if err != nil {
+		return mcplib.NewToolResultError(err.Error()), nil
+	}
+	return mcplib.NewToolResultText(string(payload)), nil
 }
 
 // ── shared ────────────────────────────────────────────────────────────────────
