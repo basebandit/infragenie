@@ -20,12 +20,17 @@ func (ReliabilityReviewer) Review(_ context.Context, in ReviewInput) ([]models.F
 		if f.Status == "deleted" || f.NewContent == "" {
 			continue
 		}
-		if !isK8sManifest(f.Path) || !isDeployment(f.NewContent) {
+		if !isK8sManifest(f.Path) || !isWorkload(f.NewContent) {
 			continue
 		}
+		// Resource limits/requests matter for any workload, batch included.
 		findings = append(findings, checkResourceLimits(f)...)
-		findings = append(findings, checkProbes(f)...)
-		findings = append(findings, checkReplicas(f)...)
+		// Probes and replicas only apply to long-running workloads — batch jobs
+		// run to completion and have neither.
+		if isDeployment(f.NewContent) {
+			findings = append(findings, checkProbes(f)...)
+			findings = append(findings, checkReplicas(f)...)
+		}
 	}
 	return findings, nil
 }

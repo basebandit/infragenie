@@ -39,6 +39,53 @@ spec:
             port: 8080
 `
 
+const cronJobSecure = `apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: etl
+  labels:
+    app.kubernetes.io/name: etl
+spec:
+  schedule: "0 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+          containers:
+          - name: etl
+            image: etl:1.0.0
+            securityContext:
+              readOnlyRootFilesystem: true
+            resources:
+              limits:
+                cpu: "500m"
+                memory: "256Mi"
+              requests:
+                cpu: "250m"
+                memory: "128Mi"
+`
+
+const cronJobInsecure = `apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: etl
+  labels:
+    app.kubernetes.io/name: etl
+spec:
+  schedule: "0 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: etl
+            image: etl:1.0.0
+`
+
 func makeInput(path, content string, gp *models.GoldenPath) ReviewInput {
 	return ReviewInput{
 		Diff: &models.Diff{Files: []models.FileDiff{
@@ -126,6 +173,27 @@ func TestGoldenPath_NilGoldenPathIsNoop(t *testing.T) {
 	require.Empty(t, fs)
 }
 
+func TestGoldenPath_CronJobSecurityEnforced(t *testing.T) {
+	gp := &models.GoldenPath{Security: models.Security{
+		RequireNonRoot:        true,
+		RequireReadOnlyRootFS: true,
+	}}
+	in := makeInput("cronjob.yaml", cronJobInsecure, gp)
+	fs, err := GoldenPathReviewer{}.Review(context.Background(), in)
+	require.NoError(t, err)
+	require.NotEmpty(t, findByRuleID(fs, "goldenpath.security.require-non-root"))
+	require.NotEmpty(t, findByRuleID(fs, "goldenpath.security.require-readonly-rootfs"))
+}
+
+func TestGoldenPath_CronJobNetworkPolicyNotRequired(t *testing.T) {
+	// NetworkPolicy enforcement stays scoped to long-running workloads.
+	gp := &models.GoldenPath{Security: models.Security{RequireNetworkPolicy: true}}
+	in := makeInput("cronjob.yaml", cronJobSecure, gp)
+	fs, err := GoldenPathReviewer{}.Review(context.Background(), in)
+	require.NoError(t, err)
+	require.Empty(t, findByRuleID(fs, "goldenpath.security.require-network-policy"))
+}
+
 // ── ReliabilityReviewer ───────────────────────────────────────────────────────
 
 func TestReliability_CleanManifestNoFindings(t *testing.T) {
@@ -157,6 +225,24 @@ func TestReliability_SingleReplica(t *testing.T) {
 	fs, err := ReliabilityReviewer{}.Review(context.Background(), in)
 	require.NoError(t, err)
 	require.NotEmpty(t, findByRuleID(fs, "reliability.single-replica"))
+}
+
+func TestReliability_CronJobResourceLimitsFlagged(t *testing.T) {
+	in := makeInput("cronjob.yaml", cronJobInsecure, nil)
+	fs, err := ReliabilityReviewer{}.Review(context.Background(), in)
+	require.NoError(t, err)
+	require.NotEmpty(t, findByRuleID(fs, "reliability.resource-limits"))
+}
+
+func TestReliability_CronJobNoProbeOrReplicaFindings(t *testing.T) {
+	// Batch workloads run to completion: probes and replica checks must not fire.
+	in := makeInput("cronjob.yaml", cronJobSecure, nil)
+	fs, err := ReliabilityReviewer{}.Review(context.Background(), in)
+	require.NoError(t, err)
+	require.Empty(t, findByRuleID(fs, "reliability.liveness-probe"))
+	require.Empty(t, findByRuleID(fs, "reliability.readiness-probe"))
+	require.Empty(t, findByRuleID(fs, "reliability.single-replica"))
+	require.Empty(t, findByRuleID(fs, "reliability.resource-limits"))
 }
 
 // ── ConventionsReviewer ───────────────────────────────────────────────────────
