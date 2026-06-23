@@ -10,6 +10,7 @@ import (
 	"github.com/basebandit/infragenie/internal/goldenpath"
 	"github.com/basebandit/infragenie/internal/grounding"
 	"github.com/basebandit/infragenie/internal/llm"
+	"github.com/basebandit/infragenie/internal/render"
 	"github.com/basebandit/infragenie/internal/repo"
 	"github.com/basebandit/infragenie/internal/reporter"
 	"github.com/basebandit/infragenie/internal/reviewers"
@@ -47,7 +48,7 @@ func reviewCmd(appCfg **config.AppConfig) *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := context.Background()
 
-			// ── load golden path ──────────────────────────────────────────────
+			// load golden path
 			var gp *models.GoldenPath
 			if gpPath != "" {
 				loaded, err := goldenpath.New(".").Load(gpPath)
@@ -57,7 +58,7 @@ func reviewCmd(appCfg **config.AppConfig) *cobra.Command {
 				gp = loaded
 			}
 
-			// ── load diff ─────────────────────────────────────────────────────
+			// load diff
 			var d *models.Diff
 			switch {
 			case prTarget != "":
@@ -83,13 +84,35 @@ func reviewCmd(appCfg **config.AppConfig) *cobra.Command {
 				return fmt.Errorf("one of --diff or --pr is required")
 			}
 
-			// ── repo context ──────────────────────────────────────────────────
+			// repo context
 			rc, _ := repo.Build(".")
 
-			// ── scanners ──────────────────────────────────────────────────────
+			// Render Helm charts touched by the diff so the reviewers check real
+			// manifests instead of skipping templates. Best-effort: needs helm on
+			// PATH and the chart on disk (true under --diff and in CI checkouts).
+			if render.HelmAvailable() {
+				changed := make([]string, 0, len(d.Files))
+				for _, fd := range d.Files {
+					changed = append(changed, fd.Path)
+				}
+				for _, chart := range render.DiscoverChangedCharts(changed) {
+					rendered, rerr := render.RenderHelmChart(ctx, chart)
+					if rerr != nil {
+						fmt.Fprintf(os.Stderr, "render: %v\n", rerr)
+						continue
+					}
+					d.Files = append(d.Files, models.FileDiff{
+						Path:       render.RenderedPath(chart),
+						Status:     "added",
+						NewContent: rendered,
+					})
+				}
+			}
+
+			// scanners
 			selected := scanners.Select(allScanners(), gp, rc, scannerOverride)
 
-			// ── resolve config defaults (env var > config file > CLI default) ──
+			// resolve config defaults (env var > config file > CLI default)
 			cfg := *appCfg
 			if providerName == "" {
 				providerName = cfg.DefaultProvider()
@@ -106,7 +129,7 @@ func reviewCmd(appCfg **config.AppConfig) *cobra.Command {
 				budgetUSD = cfg.DefaultBudgetUSD()
 			}
 
-			// ── grounder ──────────────────────────────────────────────────────
+			// grounder
 			apiKey := cfg.APIKey(providerName)
 			resolvedModel := model
 			if resolvedModel == "" {
@@ -123,7 +146,7 @@ func reviewCmd(appCfg **config.AppConfig) *cobra.Command {
 				}
 			}
 
-			// ── budget ────────────────────────────────────────────────────────
+			// budget
 			var budget *telemetry.Counter
 			if budgetTokens > 0 || budgetUSD > 0 {
 				budget = telemetry.NewCounter(telemetry.Budget{
@@ -132,14 +155,14 @@ func reviewCmd(appCfg **config.AppConfig) *cobra.Command {
 				})
 			}
 
-			// ── reviewers ─────────────────────────────────────────────────────
+			// reviewers
 			rev := []reviewers.Reviewer{
 				reviewers.GoldenPathReviewer{},
 				reviewers.ReliabilityReviewer{},
 				reviewers.ConventionsReviewer{},
 			}
 
-			// ── engine ────────────────────────────────────────────────────────
+			// engine
 			eng := engine.New(engine.Config{
 				GoldenPath: gp,
 				Scanners:   selected,
@@ -153,13 +176,13 @@ func reviewCmd(appCfg **config.AppConfig) *cobra.Command {
 				return err
 			}
 
-			// ── output ────────────────────────────────────────────────────────
+			// output
 			if err := reporter.Write(os.Stdout, result.Findings, result.Skipped,
 				reporter.Format(format)); err != nil {
 				return err
 			}
 
-			// ── human-in-the-loop fix suggestions ─────────────────────────────
+			// human-in-the-loop fix suggestions
 			if (fix || fixAuto) && len(result.Findings) > 0 {
 				if err := runFix(ctx, result.Findings, providerName, apiKey, resolvedModel, fixAuto); err != nil {
 					fmt.Fprintf(os.Stderr, "fix: %v\n", err)
