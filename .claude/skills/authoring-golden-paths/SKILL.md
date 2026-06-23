@@ -12,7 +12,13 @@ A `goldenpath.yml` is the executable standard. Loader: `internal/goldenpath/load
 - **Canonical** (platform-team repo): declares the standard. `name` required, no `extends`.
 - **Override** (service repo): `extends:` a canonical (local path or `@ref`), then per-repo `rules:` / `ignore:` / severity / budget. `IsOverride()` is true when `extends` is set.
 
-`extends:` resolves at load time and merges: scalars override, `rules`/`ignore` accumulate, parent `defaults.fail_on`/`budget` become effective when the child omits them. **Remote refs (`github.com/`, `https://`, `git@`) are NOT supported in v0** — use a local path. (`infragenie init --starter kubernetes` currently emits a remote URL; replace it with a local `extends:` or a self-contained file.)
+`extends:` resolves at load time and merges: scalars override, `rules`/`ignore` accumulate, parent `defaults.fail_on`/`budget` become effective when the child omits them. Parents can be local paths or remote refs:
+
+- local: `extends: ../platform/goldenpath.yml`
+- https: `extends: https://raw.githubusercontent.com/owner/repo/main/goldenpath.yml`
+- github shorthand: `extends: github.com/owner/repo/path/goldenpath.yml@v1` (ref defaults to main)
+
+SSH (`git@`) is not supported. Remote fetch has a 15s timeout and a 1 MiB cap. Pin a tag/sha rather than `main` for reproducibility.
 
 ## Cold-start ladder (get a file from any starting point)
 
