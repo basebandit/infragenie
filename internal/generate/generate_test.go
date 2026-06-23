@@ -44,31 +44,35 @@ func testGoldenPath() *models.GoldenPath {
 
 // TestGenerateConformsToGoldenPath is the headline contract: a service rendered
 // from a Golden Path passes that same Golden Path's deterministic reviewers with
-// zero findings.
+// zero findings. Every shipped template must satisfy it.
 func TestGenerateConformsToGoldenPath(t *testing.T) {
-	gp := testGoldenPath()
-	dir := t.TempDir()
+	for _, tmpl := range []string{"k8s-service", "helm-service"} {
+		t.Run(tmpl, func(t *testing.T) {
+			gp := testGoldenPath()
+			dir := t.TempDir()
 
-	res, err := generate.New().Run(generate.Params{
-		Name:       "demo",
-		Template:   "k8s-service",
-		OutDir:     dir,
-		GoldenPath: gp,
-	})
-	require.NoError(t, err)
-	require.NotEmpty(t, res.Files)
+			res, err := generate.New().Run(generate.Params{
+				Name:       "demo",
+				Template:   tmpl,
+				OutDir:     dir,
+				GoldenPath: gp,
+			})
+			require.NoError(t, err)
+			require.NotEmpty(t, res.Files)
 
-	d := diffFromFiles(t, dir, res.Files)
+			d := diffFromFiles(t, dir, res.Files)
 
-	revs := []reviewers.Reviewer{
-		reviewers.GoldenPathReviewer{},
-		reviewers.ReliabilityReviewer{},
-		reviewers.ConventionsReviewer{},
-	}
-	for _, r := range revs {
-		findings, err := r.Review(context.Background(), reviewers.ReviewInput{Diff: d, GoldenPath: gp})
-		require.NoError(t, err)
-		assert.Emptyf(t, findings, "reviewer %q produced findings: %+v", r.Name(), findings)
+			revs := []reviewers.Reviewer{
+				reviewers.GoldenPathReviewer{},
+				reviewers.ReliabilityReviewer{},
+				reviewers.ConventionsReviewer{},
+			}
+			for _, r := range revs {
+				findings, err := r.Review(context.Background(), reviewers.ReviewInput{Diff: d, GoldenPath: gp})
+				require.NoError(t, err)
+				assert.Emptyf(t, findings, "reviewer %q produced findings: %+v", r.Name(), findings)
+			}
+		})
 	}
 }
 

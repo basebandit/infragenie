@@ -1,0 +1,10 @@
+replicaCount: 2
+
+image:
+  repository: [[ .Service.Image ]]
+  tag: "[[ .Service.Tag ]]"
+  pullPolicy: IfNotPresent
+
+service:
+  port: 80
+  targetPort: [[ .Service.Port ]]
