@@ -1,21 +1,21 @@
 ## Summary
 
-_What this change does, in a sentence or two._
+_What this PR changes, in a line or two._
 
 ## Context
 
-_The problem or motivation behind it. Link related issues — e.g. Closes #123._
+_Why it's needed — the problem or motivation. Link issues, e.g. Closes #123._
 
-## How it was tested
+## Testing
 
-_The commands you ran and what you observed. Note anything you couldn't cover._
+_How it was verified: commands run and what you observed._
 
 ## Risk & rollback
 
-_Blast radius and how to revert. Flag any breaking change or migration._
+_Blast radius, how to revert, and any breaking change or migration._
 
 ## Checklist
 
-- [ ] Tests pass locally (`make test`)
-- [ ] Docs / golden-path examples updated if behaviour changed
-- [ ] Scoped to a single concern
+- [ ] `make test` passes
+- [ ] Docs / examples updated if behaviour changed
+- [ ] Single concern, reasonably small
