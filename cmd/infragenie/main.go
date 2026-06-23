@@ -43,6 +43,7 @@ Codify standards once in goldenpath.yml, then:
 		"config file (default: .infragenie.yml or ~/.config/infragenie/config.yml)")
 
 	root.AddCommand(initCmd())
+	root.AddCommand(generateCmd())
 	root.AddCommand(reviewCmd(&appCfg))
 	root.AddCommand(scannersCmd())
 	root.AddCommand(mcpCmd())
