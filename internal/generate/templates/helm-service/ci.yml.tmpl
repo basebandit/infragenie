@@ -1,0 +1,21 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: helm-lint
+        run: helm lint .
+      [[- range .GoldenPath.CIRequired ]]
+      [[- if .Matches ]]
+      # [[ .Name ]] — Golden Path required step. Replace the placeholder with the
+      # real command/action; the matcher below is what `infragenie review` checks.
+      - name: [[ .Name ]]
+        run: echo "[[ index .Matches 0 ]]"
+      [[- end ]]
+      [[- end ]]

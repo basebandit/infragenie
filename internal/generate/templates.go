@@ -19,9 +19,13 @@ type fileTmpl struct {
 }
 
 type templateSet struct {
-	name  string
-	desc  string
-	files []fileTmpl
+	name string
+	desc string
+	// leftDelim/rightDelim override the generate-time template delimiters. Helm
+	// templates use "{{ }}" for Helm itself, so the helm-service set renders with
+	// "[[ ]]" and Helm's own actions pass through untouched. Empty = default.
+	leftDelim, rightDelim string
+	files                 []fileTmpl
 }
 
 // builtins is the registry of shipped template sets.
@@ -35,6 +39,21 @@ var builtins = map[string]templateSet{
 			{"k8s-service/Dockerfile.tmpl", "Dockerfile"},
 			{"k8s-service/ci.yml.tmpl", ".github/workflows/ci.yml"},
 			{"k8s-service/README.md.tmpl", "README.md"},
+		},
+	},
+	"helm-service": {
+		name:       "helm-service",
+		desc:       "Helm chart: Chart.yaml, values.yaml, Deployment + NetworkPolicy + Service templates, Dockerfile, CI. Conformant to the Golden Path by construction.",
+		leftDelim:  "[[",
+		rightDelim: "]]",
+		files: []fileTmpl{
+			{"helm-service/Chart.yaml.tmpl", "Chart.yaml"},
+			{"helm-service/values.yaml.tmpl", "values.yaml"},
+			{"helm-service/deployment.yaml.tmpl", "templates/deployment.yaml"},
+			{"helm-service/service.yaml.tmpl", "templates/service.yaml"},
+			{"helm-service/Dockerfile.tmpl", "Dockerfile"},
+			{"helm-service/ci.yml.tmpl", ".github/workflows/ci.yml"},
+			{"helm-service/README.md.tmpl", "README.md"},
 		},
 	},
 }

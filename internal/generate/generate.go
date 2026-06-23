@@ -64,7 +64,7 @@ func (g *Generator) Run(p Params) (*Result, error) {
 
 	res := &Result{Template: set.name, Dir: root}
 	for _, ft := range set.files {
-		rendered, err := renderFile(ft.src, data)
+		rendered, err := renderFile(ft.src, data, set.leftDelim, set.rightDelim)
 		if err != nil {
 			return nil, fmt.Errorf("render %s: %w", ft.src, err)
 		}
@@ -173,12 +173,16 @@ func labelValue(key, name, tag string) string {
 	}
 }
 
-func renderFile(src string, data templateData) ([]byte, error) {
+func renderFile(src string, data templateData, leftDelim, rightDelim string) ([]byte, error) {
 	raw, err := tmplFS.ReadFile("templates/" + src)
 	if err != nil {
 		return nil, err
 	}
-	t, err := template.New(filepath.Base(src)).Parse(string(raw))
+	t := template.New(filepath.Base(src))
+	if leftDelim != "" && rightDelim != "" {
+		t = t.Delims(leftDelim, rightDelim)
+	}
+	t, err = t.Parse(string(raw))
 	if err != nil {
 		return nil, err
 	}
