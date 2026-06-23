@@ -46,7 +46,7 @@ func testGoldenPath() *models.GoldenPath {
 // from a Golden Path passes that same Golden Path's deterministic reviewers with
 // zero findings. Every shipped template must satisfy it.
 func TestGenerateConformsToGoldenPath(t *testing.T) {
-	for _, tmpl := range []string{"k8s-service", "helm-service"} {
+	for _, tmpl := range []string{"k8s-service", "helm-service", "worker", "data-pipeline"} {
 		t.Run(tmpl, func(t *testing.T) {
 			gp := testGoldenPath()
 			dir := t.TempDir()
