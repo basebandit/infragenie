@@ -7,10 +7,10 @@ import "github.com/basebandit/infragenie/pkg/models"
 
 // Expected is one entry in a fixture file: the finding the engine must produce.
 type Expected struct {
-	RuleID   string `json:"rule_id"`
-	File     string `json:"file"`
-	Line     int    `json:"line"`
-	Severity string `json:"severity,omitempty"`
+	RuleID   string `json:"rule_id" yaml:"rule_id"`
+	File     string `json:"file" yaml:"file"`
+	Line     int    `json:"line" yaml:"line"`
+	Severity string `json:"severity,omitempty" yaml:"severity,omitempty"`
 }
 
 // Metrics holds confusion-matrix counts for a single fixture or an aggregated run.

@@ -1,0 +1,30 @@
+name: insecure-cronjob
+description: Batch workload running as root with a writable root filesystem.
+goldenpath:
+  version: 1
+  security:
+    require_non_root: true
+    require_read_only_rootfs: true
+manifests:
+  cronjob.yaml: |
+    apiVersion: batch/v1
+    kind: CronJob
+    metadata:
+      name: c
+      labels:
+        app.kubernetes.io/name: c
+    spec:
+      schedule: "0 * * * *"
+      jobTemplate:
+        spec:
+          template:
+            spec:
+              containers:
+                - name: c
+                  image: c:1.0.0
+                  resources:
+                    limits: {cpu: "500m", memory: "256Mi"}
+                    requests: {cpu: "250m", memory: "128Mi"}
+expected:
+  - {rule_id: goldenpath.security.require-non-root, file: cronjob.yaml}
+  - {rule_id: goldenpath.security.require-readonly-rootfs, file: cronjob.yaml}

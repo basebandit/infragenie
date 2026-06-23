@@ -22,9 +22,9 @@ type Fixture struct {
 }
 
 type Thresholds struct {
-	MinPrecision  float64 `json:"min_precision"`
-	MinRecall     float64 `json:"min_recall"`
-	LineTolerance int     `json:"line_tolerance"`
+	MinPrecision  float64 `json:"min_precision" yaml:"min_precision"`
+	MinRecall     float64 `json:"min_recall" yaml:"min_recall"`
+	LineTolerance int     `json:"line_tolerance" yaml:"line_tolerance"`
 }
 
 func defaultThresholds() Thresholds {

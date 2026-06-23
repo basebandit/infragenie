@@ -1,0 +1,36 @@
+name: missing-labels
+description: Required labels absent from an otherwise clean Deployment.
+goldenpath:
+  version: 1
+  required_labels: [team, app.kubernetes.io/name]
+manifests:
+  deploy.yaml: |
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: m
+      labels:
+        foo: bar
+    spec:
+      replicas: 2
+      selector:
+        matchLabels:
+          foo: bar
+      template:
+        metadata:
+          labels:
+            foo: bar
+        spec:
+          containers:
+            - name: m
+              image: m:1.0.0
+              resources:
+                limits: {cpu: "500m", memory: "256Mi"}
+                requests: {cpu: "250m", memory: "128Mi"}
+              livenessProbe:
+                httpGet: {path: /healthz, port: 8080}
+              readinessProbe:
+                httpGet: {path: /readyz, port: 8080}
+expected:
+  - {rule_id: goldenpath.required-label, file: deploy.yaml}
+  - {rule_id: goldenpath.required-label, file: deploy.yaml}
