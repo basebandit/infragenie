@@ -4,15 +4,17 @@ _What this PR changes, in a line or two._
 
 ## Context
 
-_Why it's needed — the problem or motivation. Link issues, e.g. Closes #123._
+- _Why it is needed: the problem or motivation._
+- _Linked issues, e.g. Closes #123._
 
 ## Testing
 
-_How it was verified: commands run and what you observed._
+- _Commands run._
+- _What you observed, and anything not covered._
 
 ## Risk & rollback
 
-_Blast radius, how to revert, and any breaking change or migration._
+_Blast radius and how to revert. Note any breaking change or migration._
 
 ## Checklist
 
