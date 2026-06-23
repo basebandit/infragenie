@@ -97,21 +97,25 @@ func checkSecurity(f models.FileDiff, doc manifestDoc, sec models.Security, file
 		return findings
 	}
 
-	if sec.RequireNonRoot && !containsAny(content, "runAsNonRoot: true", "runAsUser:") {
+	// Structurally parse the pod spec so securityContext is evaluated at pod and
+	// container level — not matched as a substring anywhere in the document.
+	ps, havePodSpec := extractPodSpec(doc.Raw, doc.Kind)
+
+	if sec.RequireNonRoot && havePodSpec && !ps.runsAsNonRoot() {
 		findings = append(findings, models.Finding{
 			RuleID:      "goldenpath.security.require-non-root",
 			Severity:    models.SeverityHigh,
 			File:        f.Path,
 			Title:       "container may run as root",
-			Explanation: "GoldenPath requires containers to run as non-root. No securityContext.runAsNonRoot or runAsUser found.",
-			Suggestion:  "Add `securityContext: { runAsNonRoot: true }` to the container spec.",
+			Explanation: "GoldenPath requires containers to run as non-root. Set securityContext.runAsNonRoot or a non-zero runAsUser at pod or container level.",
+			Suggestion:  "Add `securityContext: { runAsNonRoot: true }` to the pod or each container.",
 			Confidence:  0.90,
-			Evidence:    "no runAsNonRoot or runAsUser in securityContext",
+			Evidence:    "runAsNonRoot/runAsUser not set non-root at pod or container level",
 			EvidenceLoc: fmt.Sprintf("%s:%s", f.Path, doc.Kind),
 		})
 	}
 
-	if sec.RequireReadOnlyRootFS && !strings.Contains(content, "readOnlyRootFilesystem: true") {
+	if sec.RequireReadOnlyRootFS && havePodSpec && !ps.allContainersReadOnlyRoot() {
 		findings = append(findings, models.Finding{
 			RuleID:      "goldenpath.security.require-readonly-rootfs",
 			Severity:    models.SeverityMedium,
@@ -286,15 +290,6 @@ func isBatchWorkload(content string) bool {
 // isWorkload reports any pod-bearing workload (long-running or batch).
 func isWorkload(content string) bool {
 	return isDeployment(content) || isBatchWorkload(content)
-}
-
-func containsAny(s string, subs ...string) bool {
-	for _, sub := range subs {
-		if strings.Contains(s, sub) {
-			return true
-		}
-	}
-	return false
 }
 
 func lineOf(content, substr string) int {
