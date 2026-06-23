@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/basebandit/infragenie/pkg/models"
-	"gopkg.in/yaml.v3"
 )
 
 // GoldenPathReviewer is a deterministic Layer-3 reviewer that validates
@@ -27,32 +26,33 @@ func (GoldenPathReviewer) Review(_ context.Context, in ReviewInput) ([]models.Fi
 		if f.Status == "deleted" || f.NewContent == "" {
 			continue
 		}
-		findings = append(findings, checkRequiredLabels(f, gp.RequiredLabels)...)
-		findings = append(findings, checkSecurity(f, gp.Security)...)
-		findings = append(findings, checkObservability(f, gp.Observability)...)
+		// Manifest rules run per YAML document so multi-doc files, and each
+		// document's own kind and labels, are evaluated correctly.
+		if isK8sManifest(f.Path) {
+			docs := parseManifestDocs(f.NewContent)
+			fileHasNetworkPolicy := anyKind(docs, "NetworkPolicy")
+			for _, doc := range docs {
+				findings = append(findings, checkRequiredLabels(f, doc, gp.RequiredLabels)...)
+				findings = append(findings, checkSecurity(f, doc, gp.Security, fileHasNetworkPolicy)...)
+				findings = append(findings, checkObservability(f, doc, gp.Observability)...)
+			}
+		}
 		findings = append(findings, checkCISteps(f, gp.CIRequired)...)
 		findings = append(findings, checkChartShape(f, gp.ChartShape)...)
 	}
 	return findings, nil
 }
 
-// checkRequiredLabels verifies that K8s manifest metadata.labels contains all
-// labels declared in the GoldenPath required_labels list.
-func checkRequiredLabels(f models.FileDiff, required []string) []models.Finding {
-	if len(required) == 0 || !isK8sManifest(f.Path) || !hasK8sAPIVersion(f.NewContent) {
-		return nil
-	}
-	var m struct {
-		Metadata struct {
-			Labels map[string]string `yaml:"labels"`
-		} `yaml:"metadata"`
-	}
-	if err := yaml.Unmarshal([]byte(f.NewContent), &m); err != nil {
+// checkRequiredLabels verifies that a manifest document's metadata.labels
+// contains all labels declared in the GoldenPath required_labels list.
+// Undecodable documents (un-rendered templates) are skipped — we don't guess.
+func checkRequiredLabels(f models.FileDiff, doc manifestDoc, required []string) []models.Finding {
+	if len(required) == 0 || !doc.Decoded {
 		return nil
 	}
 	var findings []models.Finding
 	for _, lbl := range required {
-		if _, ok := m.Metadata.Labels[lbl]; !ok {
+		if _, ok := doc.Labels[lbl]; !ok {
 			findings = append(findings, models.Finding{
 				RuleID:      "goldenpath.required-label",
 				Severity:    models.SeverityMedium,
@@ -61,20 +61,19 @@ func checkRequiredLabels(f models.FileDiff, required []string) []models.Finding 
 				Explanation: fmt.Sprintf("GoldenPath requires label %q on all K8s manifests.", lbl),
 				Suggestion:  fmt.Sprintf("Add `%s: <value>` under metadata.labels.", lbl),
 				Confidence:  0.97,
-				Evidence:    labelsEvidence(m.Metadata.Labels),
-				EvidenceLoc: f.Path + ":metadata.labels",
+				Evidence:    labelsEvidence(doc.Labels),
+				EvidenceLoc: fmt.Sprintf("%s:%s/metadata.labels", f.Path, doc.Kind),
 			})
 		}
 	}
 	return findings
 }
 
-// checkSecurity enforces security rules from the GoldenPath Security block.
-func checkSecurity(f models.FileDiff, sec models.Security) []models.Finding {
-	if !isK8sManifest(f.Path) || !hasK8sAPIVersion(f.NewContent) {
-		return nil
-	}
-	content := f.NewContent
+// checkSecurity enforces the GoldenPath Security block against one manifest
+// document. Workload rules apply only to pod-bearing kinds; NetworkPolicy is
+// satisfied when a NetworkPolicy document exists anywhere in the same file.
+func checkSecurity(f models.FileDiff, doc manifestDoc, sec models.Security, fileHasNetworkPolicy bool) []models.Finding {
+	content := doc.Raw
 	var findings []models.Finding
 
 	if sec.ForbidImageTagLatest && strings.Contains(content, ":latest") {
@@ -93,7 +92,12 @@ func checkSecurity(f models.FileDiff, sec models.Security) []models.Finding {
 		})
 	}
 
-	if sec.RequireNonRoot && isWorkload(content) && !containsAny(content, "runAsNonRoot: true", "runAsUser:") {
+	// Remaining rules need a known workload kind.
+	if !doc.Decoded || !isWorkloadKind(doc.Kind) {
+		return findings
+	}
+
+	if sec.RequireNonRoot && !containsAny(content, "runAsNonRoot: true", "runAsUser:") {
 		findings = append(findings, models.Finding{
 			RuleID:      "goldenpath.security.require-non-root",
 			Severity:    models.SeverityHigh,
@@ -103,11 +107,11 @@ func checkSecurity(f models.FileDiff, sec models.Security) []models.Finding {
 			Suggestion:  "Add `securityContext: { runAsNonRoot: true }` to the container spec.",
 			Confidence:  0.90,
 			Evidence:    "no runAsNonRoot or runAsUser in securityContext",
-			EvidenceLoc: f.Path,
+			EvidenceLoc: fmt.Sprintf("%s:%s", f.Path, doc.Kind),
 		})
 	}
 
-	if sec.RequireReadOnlyRootFS && isWorkload(content) && !strings.Contains(content, "readOnlyRootFilesystem: true") {
+	if sec.RequireReadOnlyRootFS && !strings.Contains(content, "readOnlyRootFilesystem: true") {
 		findings = append(findings, models.Finding{
 			RuleID:      "goldenpath.security.require-readonly-rootfs",
 			Severity:    models.SeverityMedium,
@@ -117,36 +121,37 @@ func checkSecurity(f models.FileDiff, sec models.Security) []models.Finding {
 			Suggestion:  "Add `readOnlyRootFilesystem: true` to the container securityContext.",
 			Confidence:  0.90,
 			Evidence:    "readOnlyRootFilesystem not set",
-			EvidenceLoc: f.Path,
+			EvidenceLoc: fmt.Sprintf("%s:%s", f.Path, doc.Kind),
 		})
 	}
 
-	if sec.RequireNetworkPolicy && isWorkload(content) && !strings.Contains(content, "kind: NetworkPolicy") {
+	if sec.RequireNetworkPolicy && !fileHasNetworkPolicy {
 		findings = append(findings, models.Finding{
 			RuleID:      "goldenpath.security.require-network-policy",
 			Severity:    models.SeverityHigh,
 			File:        f.Path,
-			Title:       "no NetworkPolicy found for deployment",
+			Title:       fmt.Sprintf("no NetworkPolicy found for %s", doc.Kind),
 			Explanation: "GoldenPath requires a NetworkPolicy to restrict pod-to-pod traffic.",
-			Suggestion:  "Add a NetworkPolicy manifest selecting this deployment's pods.",
+			Suggestion:  "Add a NetworkPolicy manifest selecting this workload's pods.",
 			Confidence:  0.80,
-			Evidence:    "kind: NetworkPolicy not found in diff file",
-			EvidenceLoc: f.Path,
+			Evidence:    "no NetworkPolicy document in this file",
+			EvidenceLoc: fmt.Sprintf("%s:%s", f.Path, doc.Kind),
 		})
 	}
 
 	return findings
 }
 
-// checkObservability enforces observability requirements.
-func checkObservability(f models.FileDiff, obs models.Observability) []models.Finding {
-	if !isK8sManifest(f.Path) {
+// checkObservability enforces observability requirements on a manifest
+// document. Scrape annotations only make sense for long-running workloads.
+func checkObservability(f models.FileDiff, doc manifestDoc, obs models.Observability) []models.Finding {
+	if !doc.Decoded || !isLongRunningKind(doc.Kind) {
 		return nil
 	}
-	content := f.NewContent
+	content := doc.Raw
 	var findings []models.Finding
 
-	if obs.RequirePrometheusAnnotations && isDeployment(content) {
+	if obs.RequirePrometheusAnnotations {
 		hasPrometheus := strings.Contains(content, "prometheus.io/scrape") ||
 			strings.Contains(content, "prometheus.io/port")
 		if !hasPrometheus {
@@ -253,10 +258,6 @@ func isHelmChartMeta(path string) bool {
 		return true
 	}
 	return false
-}
-
-func hasK8sAPIVersion(content string) bool {
-	return strings.Contains(content, "apiVersion:")
 }
 
 func isCIFile(path string) bool {

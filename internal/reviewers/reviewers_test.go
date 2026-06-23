@@ -201,6 +201,49 @@ func TestGoldenPath_CronJobNetworkPolicyEnforced(t *testing.T) {
 	require.Empty(t, findByRuleID(fs, "goldenpath.security.require-network-policy"))
 }
 
+func TestGoldenPath_MultiDocSecondDocumentChecked(t *testing.T) {
+	// A label missing on the SECOND document must be caught — the old whole-file
+	// approach only ever decoded the first document.
+	svc := "apiVersion: v1\nkind: Service\nmetadata:\n  name: x\n  labels:\n    team: platform\n"
+	dep := "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: x\n  labels:\n    app.kubernetes.io/name: x\n"
+	gp := &models.GoldenPath{RequiredLabels: []string{"team"}}
+
+	in := makeInput("manifests.yaml", svc+"---\n"+dep, gp)
+	fs, err := GoldenPathReviewer{}.Review(context.Background(), in)
+	require.NoError(t, err)
+	// Service has team; Deployment does not → exactly one finding, for the Deployment.
+	found := findByRuleID(fs, "goldenpath.required-label")
+	require.Len(t, found, 1)
+	require.Contains(t, found[0].Title, "team")
+}
+
+func TestGoldenPath_TemplatedDocumentSkipped(t *testing.T) {
+	// An un-rendered Helm template can't be decoded; skip it rather than guess.
+	tmpl := "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: {{ .Values.name }}\n  labels: {{ .Values.labels }}\n"
+	gp := &models.GoldenPath{RequiredLabels: []string{"team"}}
+	in := makeInput("templates/deployment.yaml", tmpl, gp)
+	fs, err := GoldenPathReviewer{}.Review(context.Background(), in)
+	require.NoError(t, err)
+	require.Empty(t, findByRuleID(fs, "goldenpath.required-label"))
+}
+
+func TestGoldenPath_NetworkPolicyAcrossDocuments(t *testing.T) {
+	// A co-located NetworkPolicy document satisfies the requirement.
+	dep := "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: x\nspec:\n  template:\n    spec:\n      securityContext:\n        runAsNonRoot: true\n"
+	np := "apiVersion: networking.k8s.io/v1\nkind: NetworkPolicy\nmetadata:\n  name: x\n"
+	gp := &models.GoldenPath{Security: models.Security{RequireNetworkPolicy: true}}
+
+	in := makeInput("manifests.yaml", dep+"---\n"+np, gp)
+	fs, err := GoldenPathReviewer{}.Review(context.Background(), in)
+	require.NoError(t, err)
+	require.Empty(t, findByRuleID(fs, "goldenpath.security.require-network-policy"))
+
+	in = makeInput("manifests.yaml", dep, gp)
+	fs, err = GoldenPathReviewer{}.Review(context.Background(), in)
+	require.NoError(t, err)
+	require.NotEmpty(t, findByRuleID(fs, "goldenpath.security.require-network-policy"))
+}
+
 // ── ReliabilityReviewer ───────────────────────────────────────────────────────
 
 func TestReliability_CleanManifestNoFindings(t *testing.T) {
