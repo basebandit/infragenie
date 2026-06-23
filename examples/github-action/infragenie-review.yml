@@ -20,53 +20,37 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: "1.21"
-
-      - name: Install infragenie
-        run: go install github.com/basebandit/infragenie/cmd/infragenie@latest
-
-      - name: Install scanners
-        run: |
-          pip install checkov semgrep
-          wget -qO /usr/local/bin/hadolint \
-            https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64
-          chmod +x /usr/local/bin/hadolint
-          go install github.com/securego/gosec/v2/cmd/gosec@latest
-
-      - name: Review PR
+      # Recommended: the published action bundles infragenie + all scanners.
+      - name: Golden Path review
+        uses: basebandit/infragenie@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          # Optional: override provider/model without changing goldenpath.yml
-          # INFRAGENIE_PROVIDER: anthropic
-          # ANTHROPIC_MODEL: claude-3-5-haiku-20241022
-          # INFRAGENIE_FAIL_ON: high
-        run: |
-          infragenie review \
-            --goldenpath goldenpath.yml \
-            --pr "${{ github.repository }}#${{ github.event.pull_request.number }}" \
-            --provider anthropic \
-            --format github \
-            --fail-on high \
-            --budget-tokens 50000 \
-            --budget-usd 0.50
+        with:
+          goldenpath: goldenpath.yml
+          provider: anthropic
+          fail-on: high
+          budget-tokens: "50000"
+          budget-usd: "0.50"
 
-      # Uncomment to auto-apply LLM-suggested fixes and commit them back to the PR branch.
-      # Requires write access to contents and the provider flag set above.
+      # ── Alternative: raw CLI (no Docker action) ──────────────────────────────
+      # Use this if you prefer to pin the binary and scanners yourself.
       #
-      # - name: Auto-fix findings
-      #   env:
+      # - uses: actions/setup-go@v5
+      #   with: { go-version-file: go.mod }
+      # - run: go install github.com/basebandit/infragenie/cmd/infragenie@latest
+      # - run: |
+      #     pip install checkov semgrep
+      #     wget -qO /usr/local/bin/hadolint \
+      #       https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64
+      #     chmod +x /usr/local/bin/hadolint
+      #     go install github.com/securego/gosec/v2/cmd/gosec@latest
+      # - env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       #     ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       #   run: |
       #     infragenie review \
       #       --goldenpath goldenpath.yml \
       #       --pr "${{ github.repository }}#${{ github.event.pull_request.number }}" \
-      #       --provider anthropic \
-      #       --fix-auto
-      #     git config user.name  "infragenie[bot]"
-      #     git config user.email "infragenie[bot]@users.noreply.github.com"
-      #     git diff --quiet || git commit -am "fix: apply infragenie auto-fixes"
-      #     git push
+      #       --provider anthropic --format github --fail-on high \
+      #       --budget-tokens 50000 --budget-usd 0.50
