@@ -78,9 +78,11 @@ matching. Generated manifests must therefore:
   readiness probes, `replicas: 2+`) and `conventions` (`app.kubernetes.io/` labels,
   `runtime_rules` patterns → injected as annotations).
 
-A Helm `Chart.yaml` has `apiVersion:` but no labels, so the label check falsely
-flags it — that's why the shipped template emits **plain manifests**, not Helm.
-Fix the reviewer before adding a `helm-service` template.
+Helm chart metadata (`Chart.yaml`, `values*.yaml`) carries Helm's `apiVersion:`
+but is not a K8s object, so `isK8sManifest` (in `goldenpath.go`) excludes it from
+manifest checks. Two templates ship: `k8s-service` (plain manifests) and
+`helm-service` (a Helm chart). Helm templates render with generate-time `[[ ]]`
+delimiters so Helm's own `{{ }}` passes through — see `internal/generate/templates.go`.
 
 ## Build / test
 
