@@ -1,34 +1,21 @@
-<!--
-Write like you're briefing a colleague — plain prose, not box-ticking. Lead with
-what a reviewer needs to judge this quickly. Delete any heading that doesn't apply;
-don't leave it empty. No "Generated with …" footers.
--->
-
 ## Summary
 
-<!-- What changed, in a sentence or two. This is the first thing the reviewer reads. -->
+_What this change does, in a sentence or two._
 
-## Why
+## Context
 
-<!-- The problem, gap, or request behind it. Link the issue if there is one (Closes #). -->
+_The problem or motivation behind it. Link related issues — e.g. Closes #123._
 
-## Testing
+## How it was tested
 
-<!--
-How you verified it — commands run, what you saw, anything you couldn't cover.
-CI already runs: build · go test -race ./... · eval harness (TestFixtureCorpus) · lint · secret scan.
-Add an eval fixture when you touch scanner adapters, grounding prompts, or reviewer logic
-(see internal/eval/README.md). For golden-path/generate changes, prove the loop stays clean:
-
-    infragenie generate service demo --goldenpath goldenpath.yml
-    infragenie review   --goldenpath goldenpath.yml --diff HEAD~1   # → No findings.
--->
+_The commands you ran and what you observed. Note anything you couldn't cover._
 
 ## Risk & rollback
 
-<!-- Blast radius and how to revert. "Low — additive, revert the commit" is a fine answer. Note any breaking change or migration here. -->
+_Blast radius and how to revert. Flag any breaking change or migration._
 
----
+## Checklist
 
-- [ ] Scoped small and single-concern (≤ ~10 files)
+- [ ] Tests pass locally (`make test`)
 - [ ] Docs / golden-path examples updated if behaviour changed
+- [ ] Scoped to a single concern
