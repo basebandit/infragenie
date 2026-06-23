@@ -2,6 +2,7 @@ package reporter
 
 import (
 	"bytes"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -34,6 +35,56 @@ var sampleFindings = []models.Finding{
 		TrustLevel: "T3",
 		Confidence: 0.95,
 	},
+}
+
+func TestWriteSARIF(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, Write(&buf, sampleFindings, nil, FormatSARIF))
+
+	var report struct {
+		Version string `json:"version"`
+		Runs    []struct {
+			Tool struct {
+				Driver struct {
+					Name  string `json:"name"`
+					Rules []struct {
+						ID string `json:"id"`
+					} `json:"rules"`
+				} `json:"driver"`
+			} `json:"tool"`
+			Results []struct {
+				RuleID    string                `json:"ruleId"`
+				Level     string                `json:"level"`
+				Message   struct{ Text string } `json:"message"`
+				Locations []struct {
+					PhysicalLocation struct {
+						ArtifactLocation struct {
+							URI string `json:"uri"`
+						} `json:"artifactLocation"`
+						Region *struct {
+							StartLine int `json:"startLine"`
+						} `json:"region"`
+					} `json:"physicalLocation"`
+				} `json:"locations"`
+			} `json:"results"`
+		} `json:"runs"`
+	}
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &report), "SARIF must be valid JSON")
+
+	require.Equal(t, "2.1.0", report.Version)
+	require.Len(t, report.Runs, 1)
+	run := report.Runs[0]
+	require.Equal(t, "infragenie", run.Tool.Driver.Name)
+	require.Len(t, run.Results, 2)
+	require.Len(t, run.Tool.Driver.Rules, 2, "rules deduped per ruleId")
+
+	r0 := run.Results[0]
+	require.Equal(t, "checkov.CKV_K8S_14", r0.RuleID)
+	require.Equal(t, "error", r0.Level) // high → error
+	require.Equal(t, "charts/payments/deployment.yaml", r0.Locations[0].PhysicalLocation.ArtifactLocation.URI)
+	require.NotNil(t, r0.Locations[0].PhysicalLocation.Region)
+	require.Equal(t, 12, r0.Locations[0].PhysicalLocation.Region.StartLine)
+	require.Equal(t, "warning", run.Results[1].Level) // medium → warning
 }
 
 func TestWriteText(t *testing.T) {
