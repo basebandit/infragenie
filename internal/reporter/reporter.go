@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 
 	"github.com/basebandit/infragenie/pkg/models"
@@ -16,6 +17,7 @@ const (
 	FormatText   Format = "text"
 	FormatJSON   Format = "json"
 	FormatGitHub Format = "github"
+	FormatSARIF  Format = "sarif"
 )
 
 // Write renders findings to w in the requested format.
@@ -25,6 +27,8 @@ func Write(w io.Writer, findings []models.Finding, skipped []string, format Form
 		return writeJSON(w, findings, skipped)
 	case FormatGitHub:
 		return writeGitHub(w, findings)
+	case FormatSARIF:
+		return writeSARIF(w, findings)
 	default:
 		return writeText(w, findings, skipped)
 	}
@@ -147,4 +151,128 @@ func ghLevel(s models.Severity) string {
 	default:
 		return "notice"
 	}
+}
+
+// ── SARIF 2.1.0 ─────────────────────────────────────────────────────────────────
+
+// writeSARIF emits SARIF 2.1.0 so findings can be uploaded to GitHub code
+// scanning (github/codeql-action/upload-sarif) and surfaced in the Security tab.
+// Spec: https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html
+func writeSARIF(w io.Writer, findings []models.Finding) error {
+	rules := map[string]sarifRule{}
+	results := make([]sarifResult, 0, len(findings))
+
+	for _, f := range findings {
+		if _, ok := rules[f.RuleID]; !ok {
+			rules[f.RuleID] = sarifRule{
+				ID:               f.RuleID,
+				Name:             f.RuleID,
+				ShortDescription: sarifText{Text: f.Title},
+			}
+		}
+		loc := sarifLocation{}
+		loc.PhysicalLocation.ArtifactLocation.URI = f.File
+		if f.Line > 0 {
+			loc.PhysicalLocation.Region = &sarifRegion{StartLine: f.Line}
+		}
+		results = append(results, sarifResult{
+			RuleID:    f.RuleID,
+			Level:     sarifLevel(f.Severity),
+			Message:   sarifText{Text: sarifMessage(f)},
+			Locations: []sarifLocation{loc},
+		})
+	}
+
+	driverRules := make([]sarifRule, 0, len(rules))
+	for _, r := range rules {
+		driverRules = append(driverRules, r)
+	}
+	sort.Slice(driverRules, func(i, j int) bool { return driverRules[i].ID < driverRules[j].ID })
+
+	report := sarifReport{
+		Schema:  "https://json.schemastore.org/sarif-2.1.0.json",
+		Version: "2.1.0",
+		Runs: []sarifRun{{
+			Tool: sarifTool{Driver: sarifDriver{
+				Name:           "infragenie",
+				InformationURI: "https://github.com/basebandit/infragenie",
+				Rules:          driverRules,
+			}},
+			Results: results,
+		}},
+	}
+
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	return enc.Encode(report)
+}
+
+func sarifLevel(s models.Severity) string {
+	switch s {
+	case models.SeverityCritical, models.SeverityHigh:
+		return "error"
+	case models.SeverityMedium:
+		return "warning"
+	default:
+		return "note"
+	}
+}
+
+func sarifMessage(f models.Finding) string {
+	msg := f.Title
+	if f.Explanation != "" {
+		msg += " — " + strings.ReplaceAll(f.Explanation, "\n", " ")
+	}
+	return msg
+}
+
+type sarifReport struct {
+	Schema  string     `json:"$schema"`
+	Version string     `json:"version"`
+	Runs    []sarifRun `json:"runs"`
+}
+
+type sarifRun struct {
+	Tool    sarifTool     `json:"tool"`
+	Results []sarifResult `json:"results"`
+}
+
+type sarifTool struct {
+	Driver sarifDriver `json:"driver"`
+}
+
+type sarifDriver struct {
+	Name           string      `json:"name"`
+	InformationURI string      `json:"informationUri"`
+	Rules          []sarifRule `json:"rules"`
+}
+
+type sarifRule struct {
+	ID               string    `json:"id"`
+	Name             string    `json:"name"`
+	ShortDescription sarifText `json:"shortDescription"`
+}
+
+type sarifResult struct {
+	RuleID    string          `json:"ruleId"`
+	Level     string          `json:"level"`
+	Message   sarifText       `json:"message"`
+	Locations []sarifLocation `json:"locations"`
+}
+
+type sarifLocation struct {
+	PhysicalLocation struct {
+		ArtifactLocation struct {
+			URI string `json:"uri"`
+		} `json:"artifactLocation"`
+		Region *sarifRegion `json:"region,omitempty"`
+	} `json:"physicalLocation"`
+}
+
+type sarifRegion struct {
+	StartLine int `json:"startLine"`
+}
+
+type sarifText struct {
+	Text string `json:"text"`
 }

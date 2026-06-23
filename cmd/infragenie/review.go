@@ -10,8 +10,8 @@ import (
 	"github.com/basebandit/infragenie/internal/goldenpath"
 	"github.com/basebandit/infragenie/internal/grounding"
 	"github.com/basebandit/infragenie/internal/llm"
-	"github.com/basebandit/infragenie/internal/reporter"
 	"github.com/basebandit/infragenie/internal/repo"
+	"github.com/basebandit/infragenie/internal/reporter"
 	"github.com/basebandit/infragenie/internal/reviewers"
 	"github.com/basebandit/infragenie/internal/scanners"
 	"github.com/basebandit/infragenie/internal/telemetry"
@@ -177,7 +177,7 @@ func reviewCmd(appCfg **config.AppConfig) *cobra.Command {
 	cmd.Flags().StringVar(&githubToken, "github-token", "", "GitHub token (default: $GITHUB_TOKEN)")
 	cmd.Flags().StringVar(&providerName, "provider", "", "LLM provider for grounding: anthropic, openai, local")
 	cmd.Flags().StringVar(&model, "model", "", "LLM model (default chosen per provider)")
-	cmd.Flags().StringVarP(&format, "format", "f", "text", "output format: text, json, github")
+	cmd.Flags().StringVarP(&format, "format", "f", "text", "output format: text, json, github, sarif")
 	cmd.Flags().StringVar(&failOn, "fail-on", "", "exit 1 when any finding is at or above this severity (critical, high, medium, low)")
 	cmd.Flags().IntVar(&budgetTokens, "budget-tokens", 0, "max tokens to spend on grounding (0 = unlimited)")
 	cmd.Flags().Float64Var(&budgetUSD, "budget-usd", 0, "max USD to spend on grounding (0 = unlimited)")
@@ -188,7 +188,6 @@ func reviewCmd(appCfg **config.AppConfig) *cobra.Command {
 
 	return cmd
 }
-
 
 func failOnSeverity(flag string, gp *models.GoldenPath, cfg *config.AppConfig) models.Severity {
 	if flag != "" {
