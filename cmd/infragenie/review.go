@@ -87,25 +87,39 @@ func reviewCmd(appCfg **config.AppConfig) *cobra.Command {
 			// repo context
 			rc, _ := repo.Build(".")
 
-			// Render Helm charts touched by the diff so the reviewers check real
-			// manifests instead of skipping templates. Best-effort: needs helm on
-			// PATH and the chart on disk (true under --diff and in CI checkouts).
+			// Render templated infra touched by the diff (Helm charts, kustomize
+			// overlays) so the reviewers check real manifests instead of skipping
+			// templates. Best-effort: needs the tool on PATH and the source on
+			// disk (true under --diff and in CI checkouts).
+			changed := make([]string, 0, len(d.Files))
+			for _, fd := range d.Files {
+				changed = append(changed, fd.Path)
+			}
+			appendRendered := func(dir, label, out string) {
+				d.Files = append(d.Files, models.FileDiff{
+					Path:       render.RenderedPath(dir, label),
+					Status:     "added",
+					NewContent: out,
+				})
+			}
 			if render.HelmAvailable() {
-				changed := make([]string, 0, len(d.Files))
-				for _, fd := range d.Files {
-					changed = append(changed, fd.Path)
-				}
 				for _, chart := range render.DiscoverChangedCharts(changed) {
-					rendered, rerr := render.RenderHelmChart(ctx, chart)
+					out, rerr := render.RenderHelmChart(ctx, chart)
 					if rerr != nil {
 						fmt.Fprintf(os.Stderr, "render: %v\n", rerr)
 						continue
 					}
-					d.Files = append(d.Files, models.FileDiff{
-						Path:       render.RenderedPath(chart),
-						Status:     "added",
-						NewContent: rendered,
-					})
+					appendRendered(chart, "helm-rendered", out)
+				}
+			}
+			if render.KustomizeAvailable() {
+				for _, dir := range render.DiscoverChangedKustomizations(changed) {
+					out, rerr := render.RenderKustomization(ctx, dir)
+					if rerr != nil {
+						fmt.Fprintf(os.Stderr, "render: %v\n", rerr)
+						continue
+					}
+					appendRendered(dir, "kustomize-rendered", out)
 				}
 			}
 

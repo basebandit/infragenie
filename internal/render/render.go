@@ -1,6 +1,6 @@
-// Package render turns templated infrastructure (Helm charts today) into the
-// concrete Kubernetes manifests they produce, so the review engine can check the
-// real objects instead of skipping un-rendered templates.
+// Package render turns templated infrastructure (Helm charts, kustomize overlays)
+// into the concrete Kubernetes manifests they produce, so the review engine can
+// check the real objects instead of skipping un-rendered templates.
 package render
 
 import (
@@ -31,16 +31,54 @@ func RenderHelmChart(ctx context.Context, dir string) (string, error) {
 	return string(out), nil
 }
 
+// KustomizeAvailable reports whether kustomize can run, via the kustomize binary
+// or `kubectl kustomize`.
+func KustomizeAvailable() bool {
+	if _, err := exec.LookPath("kustomize"); err == nil {
+		return true
+	}
+	_, err := exec.LookPath("kubectl")
+	return err == nil
+}
+
+// RenderKustomization builds a kustomize directory into concrete manifests,
+// preferring the kustomize binary and falling back to `kubectl kustomize`.
+func RenderKustomization(ctx context.Context, dir string) (string, error) {
+	if _, err := exec.LookPath("kustomize"); err == nil {
+		out, err := exec.CommandContext(ctx, "kustomize", "build", dir).Output()
+		if err != nil {
+			return "", fmt.Errorf("kustomize build %s: %w", dir, err)
+		}
+		return string(out), nil
+	}
+	out, err := exec.CommandContext(ctx, "kubectl", "kustomize", dir).Output()
+	if err != nil {
+		return "", fmt.Errorf("kubectl kustomize %s: %w", dir, err)
+	}
+	return string(out), nil
+}
+
 // DiscoverChangedCharts returns the Helm chart directories (those containing a
-// Chart.yaml) that own at least one of changedPaths. Walking up from each
-// changed file finds the nearest enclosing chart, so editing a single template
-// renders the whole chart it belongs to.
+// Chart.yaml) that own at least one of changedPaths.
 func DiscoverChangedCharts(changedPaths []string) []string {
+	return discoverChanged(changedPaths, []string{"Chart.yaml"})
+}
+
+// DiscoverChangedKustomizations returns the kustomize directories that own at
+// least one of changedPaths.
+func DiscoverChangedKustomizations(changedPaths []string) []string {
+	return discoverChanged(changedPaths, []string{"kustomization.yaml", "kustomization.yml", "Kustomization"})
+}
+
+// discoverChanged walks up from each changed file to the nearest enclosing
+// directory that contains one of markers, so editing a single file renders the
+// whole unit (chart or overlay) it belongs to.
+func discoverChanged(changedPaths, markers []string) []string {
 	set := map[string]bool{}
 	for _, p := range changedPaths {
 		dir := filepath.Dir(filepath.Clean(p))
 		for {
-			if fileExists(filepath.Join(dir, "Chart.yaml")) {
+			if anyFileExists(dir, markers) {
 				set[dir] = true
 				break
 			}
@@ -59,13 +97,22 @@ func DiscoverChangedCharts(changedPaths []string) []string {
 	return out
 }
 
+func anyFileExists(dir string, names []string) bool {
+	for _, n := range names {
+		if fileExists(filepath.Join(dir, n)) {
+			return true
+		}
+	}
+	return false
+}
+
 func fileExists(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && !info.IsDir()
 }
 
-// chartName returns a stable, readable identifier for a rendered chart, used as
-// the synthetic file path the reviewers attribute findings to.
-func RenderedPath(chartDir string) string {
-	return filepath.Join(strings.TrimPrefix(filepath.Clean(chartDir), "./"), "<helm-rendered>.yaml")
+// RenderedPath is the synthetic file path findings on rendered output are
+// attributed to. label distinguishes the renderer (e.g. helm-rendered).
+func RenderedPath(dir, label string) string {
+	return filepath.Join(strings.TrimPrefix(filepath.Clean(dir), "./"), "<"+label+">.yaml")
 }
