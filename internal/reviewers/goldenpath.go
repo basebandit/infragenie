@@ -93,7 +93,7 @@ func checkSecurity(f models.FileDiff, sec models.Security) []models.Finding {
 		})
 	}
 
-	if sec.RequireNonRoot && isDeployment(content) && !containsAny(content, "runAsNonRoot: true", "runAsUser:") {
+	if sec.RequireNonRoot && isWorkload(content) && !containsAny(content, "runAsNonRoot: true", "runAsUser:") {
 		findings = append(findings, models.Finding{
 			RuleID:      "goldenpath.security.require-non-root",
 			Severity:    models.SeverityHigh,
@@ -107,7 +107,7 @@ func checkSecurity(f models.FileDiff, sec models.Security) []models.Finding {
 		})
 	}
 
-	if sec.RequireReadOnlyRootFS && isDeployment(content) && !strings.Contains(content, "readOnlyRootFilesystem: true") {
+	if sec.RequireReadOnlyRootFS && isWorkload(content) && !strings.Contains(content, "readOnlyRootFilesystem: true") {
 		findings = append(findings, models.Finding{
 			RuleID:      "goldenpath.security.require-readonly-rootfs",
 			Severity:    models.SeverityMedium,
@@ -267,10 +267,24 @@ func isCIFile(path string) bool {
 		strings.Contains(path, "azure-pipelines")
 }
 
+// isDeployment reports a long-running, pod-bearing workload (probes, replicas,
+// and metrics scraping all make sense here).
 func isDeployment(content string) bool {
 	return strings.Contains(content, "kind: Deployment") ||
 		strings.Contains(content, "kind: StatefulSet") ||
 		strings.Contains(content, "kind: DaemonSet")
+}
+
+// isBatchWorkload reports a run-to-completion workload. These carry pod specs
+// too, so security and resource rules apply, but probes/replicas/scrape do not.
+func isBatchWorkload(content string) bool {
+	return strings.Contains(content, "kind: CronJob") ||
+		strings.Contains(content, "kind: Job")
+}
+
+// isWorkload reports any pod-bearing workload (long-running or batch).
+func isWorkload(content string) bool {
+	return isDeployment(content) || isBatchWorkload(content)
 }
 
 func containsAny(s string, subs ...string) bool {
