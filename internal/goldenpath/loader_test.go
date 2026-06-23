@@ -1,6 +1,9 @@
 package goldenpath
 
 import (
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -61,14 +64,37 @@ ignore:
 	require.Len(t, gp.Ignore, 1)
 }
 
-func TestRejectRemoteExtends(t *testing.T) {
+func TestRemoteExtends(t *testing.T) {
+	parent := "version: 1\nname: remote-parent\nrequired_labels: [app]\ndefaults:\n  fail_on: high\n"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, parent)
+	}))
+	defer srv.Close()
+
 	dir := t.TempDir()
-	p := writeFile(t, dir, "goldenpath.yml", `
-version: 1
-extends: github.com/x/y/goldenpath.yml@v1
-`)
-	_, err := New(dir).Load(p)
-	require.ErrorContains(t, err, "remote extends not supported")
+	child := writeFile(t, dir, "goldenpath.yml", "version: 1\nextends: "+srv.URL+"\nfail_on: medium\n")
+	gp, err := New(dir).Load(child)
+	require.NoError(t, err)
+	require.Equal(t, "remote-parent", gp.Name)
+	require.Equal(t, []string{"app"}, gp.RequiredLabels)
+	require.Equal(t, models.SeverityMedium, gp.FailOn)
+}
+
+func TestRemoteURL(t *testing.T) {
+	u, err := remoteURL("github.com/owner/repo/path/to/goldenpath.yml@v1.2.0")
+	require.NoError(t, err)
+	require.Equal(t, "https://raw.githubusercontent.com/owner/repo/v1.2.0/path/to/goldenpath.yml", u)
+
+	u, err = remoteURL("github.com/owner/repo/goldenpath.yml")
+	require.NoError(t, err)
+	require.Equal(t, "https://raw.githubusercontent.com/owner/repo/main/goldenpath.yml", u)
+
+	u, err = remoteURL("https://example.com/gp.yml")
+	require.NoError(t, err)
+	require.Equal(t, "https://example.com/gp.yml", u)
+
+	_, err = remoteURL("git@github.com:owner/repo.git")
+	require.Error(t, err)
 }
 
 func TestVersionMismatch(t *testing.T) {
