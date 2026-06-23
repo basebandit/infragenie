@@ -97,3 +97,108 @@ func isBatchKind(kind string) bool {
 func isWorkloadKind(kind string) bool {
 	return isLongRunningKind(kind) || isBatchKind(kind)
 }
+
+// ── structural pod-spec extraction ──────────────────────────────────────────────
+// These types let security checks reason about the actual securityContext at pod
+// and container level, instead of substring-matching anywhere in the file.
+
+type containerSecurityContext struct {
+	RunAsNonRoot           *bool  `yaml:"runAsNonRoot"`
+	RunAsUser              *int64 `yaml:"runAsUser"`
+	ReadOnlyRootFilesystem *bool  `yaml:"readOnlyRootFilesystem"`
+}
+
+type container struct {
+	Name            string                    `yaml:"name"`
+	Image           string                    `yaml:"image"`
+	SecurityContext *containerSecurityContext `yaml:"securityContext"`
+}
+
+type podSecurityContext struct {
+	RunAsNonRoot *bool  `yaml:"runAsNonRoot"`
+	RunAsUser    *int64 `yaml:"runAsUser"`
+}
+
+type podSpec struct {
+	SecurityContext *podSecurityContext `yaml:"securityContext"`
+	Containers      []container         `yaml:"containers"`
+}
+
+// extractPodSpec returns the pod template's spec for a workload document,
+// resolving the kind-specific nesting (Pod = spec; CronJob = spec.jobTemplate.
+// spec.template.spec; everything else = spec.template.spec). ok is false when the
+// document can't be decoded (e.g. an un-rendered template) or has no containers.
+func extractPodSpec(raw, kind string) (podSpec, bool) {
+	if kind == "Pod" {
+		var d struct {
+			Spec podSpec `yaml:"spec"`
+		}
+		if err := yaml.Unmarshal([]byte(raw), &d); err == nil && len(d.Spec.Containers) > 0 {
+			return d.Spec, true
+		}
+		return podSpec{}, false
+	}
+
+	var d struct {
+		Spec struct {
+			Template *struct {
+				Spec podSpec `yaml:"spec"`
+			} `yaml:"template"`
+			JobTemplate *struct {
+				Spec struct {
+					Template struct {
+						Spec podSpec `yaml:"spec"`
+					} `yaml:"template"`
+				} `yaml:"spec"`
+			} `yaml:"jobTemplate"`
+		} `yaml:"spec"`
+	}
+	if err := yaml.Unmarshal([]byte(raw), &d); err != nil {
+		return podSpec{}, false
+	}
+	switch {
+	case d.Spec.Template != nil && len(d.Spec.Template.Spec.Containers) > 0:
+		return d.Spec.Template.Spec, true
+	case d.Spec.JobTemplate != nil && len(d.Spec.JobTemplate.Spec.Template.Spec.Containers) > 0:
+		return d.Spec.JobTemplate.Spec.Template.Spec, true
+	}
+	return podSpec{}, false
+}
+
+// runsAsNonRoot reports whether the pod is configured non-root, either at pod
+// level or on every container. runAsUser must be non-zero (0 is root).
+func (p podSpec) runsAsNonRoot() bool {
+	if p.SecurityContext != nil && scNonRoot(p.SecurityContext.RunAsNonRoot, p.SecurityContext.RunAsUser) {
+		return true
+	}
+	if len(p.Containers) == 0 {
+		return false
+	}
+	for _, c := range p.Containers {
+		if c.SecurityContext == nil || !scNonRoot(c.SecurityContext.RunAsNonRoot, c.SecurityContext.RunAsUser) {
+			return false
+		}
+	}
+	return true
+}
+
+// allContainersReadOnlyRoot reports whether every container sets
+// readOnlyRootFilesystem: true.
+func (p podSpec) allContainersReadOnlyRoot() bool {
+	if len(p.Containers) == 0 {
+		return false
+	}
+	for _, c := range p.Containers {
+		if c.SecurityContext == nil || c.SecurityContext.ReadOnlyRootFilesystem == nil || !*c.SecurityContext.ReadOnlyRootFilesystem {
+			return false
+		}
+	}
+	return true
+}
+
+func scNonRoot(runAsNonRoot *bool, runAsUser *int64) bool {
+	if runAsNonRoot != nil && *runAsNonRoot {
+		return true
+	}
+	return runAsUser != nil && *runAsUser != 0
+}

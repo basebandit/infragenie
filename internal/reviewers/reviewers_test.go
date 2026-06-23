@@ -244,6 +244,69 @@ func TestGoldenPath_NetworkPolicyAcrossDocuments(t *testing.T) {
 	require.NotEmpty(t, findByRuleID(fs, "goldenpath.security.require-network-policy"))
 }
 
+func TestGoldenPath_StructuralSecurityContext(t *testing.T) {
+	// Substring matching would PASS this: "runAsUser:" is present (but it's 0 =
+	// root) and "readOnlyRootFilesystem: true" is present (but only on one of two
+	// containers). Structural parsing must catch both.
+	manifest := `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: x
+  labels:
+    app.kubernetes.io/name: x
+spec:
+  template:
+    spec:
+      securityContext:
+        runAsUser: 0
+      containers:
+      - name: a
+        image: a:1.0.0
+        securityContext:
+          readOnlyRootFilesystem: true
+      - name: b
+        image: b:1.0.0
+`
+	gp := &models.GoldenPath{Security: models.Security{
+		RequireNonRoot:        true,
+		RequireReadOnlyRootFS: true,
+	}}
+	in := makeInput("deploy.yaml", manifest, gp)
+	fs, err := GoldenPathReviewer{}.Review(context.Background(), in)
+	require.NoError(t, err)
+	require.NotEmpty(t, findByRuleID(fs, "goldenpath.security.require-non-root"), "runAsUser: 0 is root")
+	require.NotEmpty(t, findByRuleID(fs, "goldenpath.security.require-readonly-rootfs"), "container b lacks readOnlyRootFilesystem")
+}
+
+func TestGoldenPath_StructuralSecurityContextClean(t *testing.T) {
+	manifest := `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: x
+  labels:
+    app.kubernetes.io/name: x
+spec:
+  template:
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+      - name: a
+        image: a:1.0.0
+        securityContext:
+          readOnlyRootFilesystem: true
+`
+	gp := &models.GoldenPath{Security: models.Security{
+		RequireNonRoot:        true,
+		RequireReadOnlyRootFS: true,
+	}}
+	in := makeInput("deploy.yaml", manifest, gp)
+	fs, err := GoldenPathReviewer{}.Review(context.Background(), in)
+	require.NoError(t, err)
+	require.Empty(t, findByRuleID(fs, "goldenpath.security.require-non-root"))
+	require.Empty(t, findByRuleID(fs, "goldenpath.security.require-readonly-rootfs"))
+}
+
 // ── ReliabilityReviewer ───────────────────────────────────────────────────────
 
 func TestReliability_CleanManifestNoFindings(t *testing.T) {
