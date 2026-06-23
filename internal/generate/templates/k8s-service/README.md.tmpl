@@ -1,0 +1,29 @@
+# {{ .Service.Name }}
+
+Scaffolded by `infragenie generate` from the Golden Path **{{ .GoldenPath.Name }}**.
+This service is conformant by construction — run `infragenie review` against it and
+the Golden Path reviewers report zero findings.
+
+## Layout
+
+| File | Purpose |
+|---|---|
+| `deployment.yaml` | Deployment + co-located NetworkPolicy (non-root, read-only rootfs, probes, resource limits, Prometheus annotations) |
+| `service.yaml` | ClusterIP Service |
+| `Dockerfile` | Multi-stage, distroless, non-root |
+| `.github/workflows/ci.yml` | CI workflow covering the Golden Path's required steps |
+
+## What you still own
+
+The scaffold is correct, not complete. Fill in:
+
+- Real application code and the `Dockerfile` build stage for your runtime.
+- Real CI step commands (the generated steps are matcher placeholders).
+- Label values marked `TODO` and any team/cost-centre metadata.
+- Ingress/egress rules in the NetworkPolicy beyond default DNS egress.
+
+## Verify conformance
+
+```sh
+infragenie review --goldenpath ../../goldenpath.yml --diff HEAD~1
+```
