@@ -1,0 +1,12 @@
+# syntax=docker/dockerfile:1
+# Multi-stage build. Adjust the build stage for your runtime; the runtime stage
+# is intentionally minimal and non-root to match the Golden Path security posture.
+FROM golang:1.25-alpine AS build
+WORKDIR /src
+COPY . .
+RUN CGO_ENABLED=0 go build -trimpath -o /out/{{ .Service.Name }} ./...
+
+FROM gcr.io/distroless/static:nonroot
+USER 10001:10001
+COPY --from=build /out/{{ .Service.Name }} /app/{{ .Service.Name }}
+ENTRYPOINT ["/app/{{ .Service.Name }}"]

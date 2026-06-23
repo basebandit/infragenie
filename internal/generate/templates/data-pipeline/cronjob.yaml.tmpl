@@ -1,0 +1,56 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ .Service.Name }}
+  labels:
+    {{- range $k, $v := .Labels }}
+    {{ $k }}: {{ $v }}
+    {{- end }}
+  {{- if .Annotations }}
+  annotations:
+    {{- range $k, $v := .Annotations }}
+    {{ $k }}: {{ $v }}
+    {{- end }}
+  {{- end }}
+spec:
+  schedule: "0 * * * *"          # hourly — adjust to your cadence
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 3
+      template:
+        metadata:
+          labels:
+            {{- range $k, $v := .Labels }}
+            {{ $k }}: {{ $v }}
+            {{- end }}
+          {{- if .Annotations }}
+          annotations:
+            {{- range $k, $v := .Annotations }}
+            {{ $k }}: {{ $v }}
+            {{- end }}
+          {{- end }}
+        spec:
+          restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            fsGroup: 10001
+          containers:
+            - name: {{ .Service.Name }}
+              image: {{ .Service.Image }}:{{ .Service.Tag }}
+              securityContext:
+                readOnlyRootFilesystem: true
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 500m
+                  memory: 256Mi

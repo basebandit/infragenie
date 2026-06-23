@@ -1,0 +1,22 @@
+# {{ .Service.Name }}
+
+Scheduled **data pipeline** (CronJob) scaffolded by `infragenie generate` from the
+Golden Path **{{ .GoldenPath.Name }}**. Conformant by construction — `infragenie
+review` reports zero Golden Path findings.
+
+The CronJob ships non-root, read-only rootfs, resource limits, `Forbid`
+concurrency, and bounded job history.
+
+## Layout
+
+| File | Purpose |
+|---|---|
+| `cronjob.yaml` | CronJob (hourly by default) running the pipeline container |
+| `Dockerfile` | Multi-stage, distroless, non-root |
+| `.github/workflows/ci.yml` | CI workflow covering the Golden Path's required steps |
+
+## What you still own
+
+Application code and the `Dockerfile` build stage, the real `schedule:`, real CI
+step commands (placeholders), and `TODO` label/annotation values. Add a
+NetworkPolicy if the job needs egress to a warehouse/DB.

@@ -56,6 +56,26 @@ var builtins = map[string]templateSet{
 			{"helm-service/README.md.tmpl", "README.md"},
 		},
 	},
+	"worker": {
+		name: "worker",
+		desc: "Background worker: Deployment (no Service) + egress-only NetworkPolicy, exec probes, metrics port. Conformant to the Golden Path by construction.",
+		files: []fileTmpl{
+			{"worker/deployment.yaml.tmpl", "deployment.yaml"},
+			{"worker/Dockerfile.tmpl", "Dockerfile"},
+			{"worker/ci.yml.tmpl", ".github/workflows/ci.yml"},
+			{"worker/README.md.tmpl", "README.md"},
+		},
+	},
+	"data-pipeline": {
+		name: "data-pipeline",
+		desc: "Scheduled batch job: CronJob (non-root, resource limits, bounded history). Conformant to the Golden Path by construction.",
+		files: []fileTmpl{
+			{"data-pipeline/cronjob.yaml.tmpl", "cronjob.yaml"},
+			{"data-pipeline/Dockerfile.tmpl", "Dockerfile"},
+			{"data-pipeline/ci.yml.tmpl", ".github/workflows/ci.yml"},
+			{"data-pipeline/README.md.tmpl", "README.md"},
+		},
+	},
 }
 
 func lookup(name string) (templateSet, bool) {

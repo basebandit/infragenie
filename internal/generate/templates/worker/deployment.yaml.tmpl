@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Service.Name }}
+  labels:
+    {{- range $k, $v := .Labels }}
+    {{ $k }}: {{ $v }}
+    {{- end }}
+  {{- if .Annotations }}
+  annotations:
+    {{- range $k, $v := .Annotations }}
+    {{ $k }}: {{ $v }}
+    {{- end }}
+  {{- end }}
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Service.Name }}
+  template:
+    metadata:
+      labels:
+        {{- range $k, $v := .Labels }}
+        {{ $k }}: {{ $v }}
+        {{- end }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ .Service.Port }}"
+        prometheus.io/path: /metrics
+        {{- range $k, $v := .Annotations }}
+        {{ $k }}: {{ $v }}
+        {{- end }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+      containers:
+        - name: {{ .Service.Name }}
+          image: {{ .Service.Image }}:{{ .Service.Tag }}
+          # Worker: no Service / ingress. Exposes a metrics port only; pulls work
+          # from a queue/stream. Replace the exec probes with a real healthcheck.
+          ports:
+            - name: metrics
+              containerPort: {{ .Service.Port }}
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "exit 0"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "exit 0"]
+            initialDelaySeconds: 3
+            periodSeconds: 5
+---
+# Default-deny NetworkPolicy. Workers usually need egress (queue/DB) but no
+# ingress — open only what this worker actually talks to.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Service.Name }}
+  labels:
+    {{- range $k, $v := .Labels }}
+    {{ $k }}: {{ $v }}
+    {{- end }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Service.Name }}
+  policyTypes:
+    - Ingress
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53

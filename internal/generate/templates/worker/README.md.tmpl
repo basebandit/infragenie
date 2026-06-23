@@ -1,0 +1,23 @@
+# {{ .Service.Name }}
+
+Background **worker** scaffolded by `infragenie generate` from the Golden Path
+**{{ .GoldenPath.Name }}**. Conformant by construction — `infragenie review`
+reports zero Golden Path findings.
+
+A worker pulls work from a queue/stream; it has no Service or ingress, only a
+metrics port. The manifest ships non-root, read-only rootfs, a default-deny
+NetworkPolicy (egress only), resource limits, and exec probes.
+
+## Layout
+
+| File | Purpose |
+|---|---|
+| `deployment.yaml` | Deployment + co-located NetworkPolicy (egress-only) |
+| `Dockerfile` | Multi-stage, distroless, non-root |
+| `.github/workflows/ci.yml` | CI workflow covering the Golden Path's required steps |
+
+## What you still own
+
+Application code and the `Dockerfile` build stage, real exec/healthcheck probes,
+real CI step commands (placeholders), `TODO` label/annotation values, and the
+egress rules to your queue/DB.
