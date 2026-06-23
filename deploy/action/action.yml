@@ -1,0 +1,53 @@
+name: InfraGenie Golden Path Review
+description: >-
+  Review a pull request against your Golden Path. Scanner findings are enriched
+  with grounded explanations and surfaced as inline annotations.
+author: basebandit
+branding:
+  icon: shield
+  color: purple
+
+inputs:
+  goldenpath:
+    description: Path to goldenpath.yml in the checked-out repo.
+    required: false
+    default: goldenpath.yml
+  provider:
+    description: "LLM provider for grounding (anthropic, openai, local). Omit to skip grounding."
+    required: false
+    default: ""
+  model:
+    description: LLM model override (defaults to the provider's default).
+    required: false
+    default: ""
+  fail-on:
+    description: "Exit non-zero when any finding is at or above this severity (critical, high, medium, low)."
+    required: false
+    default: high
+  budget-tokens:
+    description: Max tokens to spend on grounding (0 = unlimited).
+    required: false
+    default: "50000"
+  budget-usd:
+    description: Max USD to spend on grounding (0 = unlimited).
+    required: false
+    default: "0.50"
+  pr:
+    description: "PR reference (owner/repo#N). Defaults to the triggering PR."
+    required: false
+    default: ""
+
+runs:
+  using: docker
+  # Self-contained: GitHub builds this image from the action directory. For
+  # faster runs, publish to GHCR (see release workflow) and switch to:
+  #   image: docker://ghcr.io/basebandit/infragenie:v1
+  image: Dockerfile
+  env:
+    INPUT_GOLDENPATH: ${{ inputs.goldenpath }}
+    INPUT_PROVIDER: ${{ inputs.provider }}
+    INPUT_MODEL: ${{ inputs.model }}
+    INPUT_FAIL_ON: ${{ inputs.fail-on }}
+    INPUT_BUDGET_TOKENS: ${{ inputs.budget-tokens }}
+    INPUT_BUDGET_USD: ${{ inputs.budget-usd }}
+    INPUT_PR: ${{ inputs.pr }}
