@@ -15,6 +15,8 @@ Every team ends up with an informal "the right way to deploy here" — but that 
 
 InfraGenie makes those standards explicit, version-controlled, and automatically enforced.
 
+**This matters more in the agentic-coding era.** AI agents now produce services, manifests, and pipelines at a rate humans can't review line by line. Without an executable standard, agent output drifts from org norms just like human output — only faster. InfraGenie gives agents and humans the *same* paved road: they **generate** scaffolds that conform by construction and **review** changes against the identical `goldenpath.yml`, over the identical engine, through CLI, GitHub Action, or MCP. Velocity goes up without governance going down.
+
 ---
 
 ## How it works
@@ -136,6 +138,10 @@ infragenie init --starter kubernetes
 infragenie init --starter fintech
 infragenie init --starter solo
 
+# Scaffold a new service that conforms to your golden path
+infragenie generate service payments-api --goldenpath goldenpath.yml
+infragenie generate service --list-templates
+
 # Review a local diff against your golden path
 infragenie review --goldenpath goldenpath.yml --diff HEAD~1
 
@@ -187,6 +193,41 @@ infragenie mcp
 --github-token     GitHub token (default: $GITHUB_TOKEN)
 ```
 
+**`generate service <name>`**
+
+```
+--template, -t     template set to render (default: k8s-service)
+--path, -p         parent directory for the generated service (default: services)
+--goldenpath, -g   path to goldenpath.yml (default: ./goldenpath.yml if present)
+--force            overwrite existing files
+--list-templates   list available templates and exit
+```
+
+---
+
+## Generate: conformant from day one
+
+`generate` renders a new service **deterministically** (no LLM, no surprises) from
+your resolved `goldenpath.yml`. Required labels, securityContext (non-root,
+read-only rootfs), a default-deny NetworkPolicy, Prometheus annotations, resource
+limits, probes, and CI steps are all baked in from the policy itself.
+
+The result is conformant **by construction** — the closed loop holds:
+
+```bash
+infragenie generate service payments-api --goldenpath goldenpath.yml
+git add services/payments-api && git commit -m "add payments-api"
+infragenie review --goldenpath goldenpath.yml --diff HEAD~1
+# → No findings.
+```
+
+The scaffold is correct, not complete: you still fill in application code, real CI
+step commands (generated steps are matcher placeholders), and `TODO` label values.
+
+The shipped `k8s-service` template emits plain Kubernetes manifests + Dockerfile +
+CI workflow. Helm-chart and additional archetype templates (worker, API, data
+pipeline) are on the roadmap.
+
 ---
 
 ## MCP server
@@ -212,22 +253,37 @@ Available tools:
 |------|-------------|
 | `review_diff` | Review a raw unified diff string. Accepts optional `goldenpath_path`. |
 | `review_pr` | Fetch and review a GitHub PR by `owner/repo#N`. Accepts optional `goldenpath_path` and `github_token`. |
+| `generate_service` | Scaffold a conformant service by `name`. Accepts optional `template`, `path`, `goldenpath_path`. Returns the files created. |
 
-Both tools return findings as JSON or text depending on the `format` argument.
+The review tools return findings as JSON or text depending on the `format` argument; `generate_service` returns the list of files created.
 
 ---
 
 ## GitHub Actions
 
-Drop the example workflow into `.github/workflows/`:
+Use the published Docker action — it bundles `infragenie` and every scanner, so
+there is nothing to install:
 
-```bash
-cp examples/github-action/infragenie-review.yml .github/workflows/
+```yaml
+- uses: actions/checkout@v4
+- uses: basebandit/infragenie@v1
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  with:
+    goldenpath: goldenpath.yml
+    provider: anthropic
+    fail-on: high
 ```
 
-Findings appear as inline PR annotations. Set `--fail-on high` to block merges on high-severity violations.
+A complete workflow (plus a raw-CLI alternative) is in
+`examples/github-action/infragenie-review.yml`. The action source lives in
+`deploy/action/` and is published as a signed image to
+`ghcr.io/basebandit/infragenie`.
 
-Required secrets: `GITHUB_TOKEN` (automatic), `ANTHROPIC_API_KEY` (for grounding).
+Findings appear as inline PR annotations. `fail-on: high` blocks merges on
+high-severity violations. Required secrets: `GITHUB_TOKEN` (automatic),
+`ANTHROPIC_API_KEY` (for grounding).
 
 ---
 
@@ -235,9 +291,10 @@ Required secrets: `GITHUB_TOKEN` (automatic), `ANTHROPIC_API_KEY` (for grounding
 
 ```
 cmd/
-└── infragenie/          # CLI entry point (cobra) — review, mcp, version
+└── infragenie/          # CLI entry point (cobra) — init, generate, review, mcp, version
 internal/
 ├── engine/              # Orchestrates all three review layers
+├── generate/            # Deterministic service scaffolding from a golden path
 ├── goldenpath/          # goldenpath.yml loader, validation, extends resolution
 ├── diff/                # Unified diff parser; local and GitHub PR sources
 ├── repo/                # Repo context: language, platform, CI detection
@@ -247,7 +304,7 @@ internal/
 ├── grounding/           # LLM grounding pass with sha256 cache
 ├── reviewers/           # Golden Path, reliability, conventions reviewers
 ├── llm/                 # Multi-provider LLM client (Anthropic, OpenAI, Ollama, …)
-├── mcp/                 # MCP server — review_diff and review_pr tools
+├── mcp/                 # MCP server — review_diff, review_pr, generate_service tools
 ├── reporter/            # Output formatters: text, JSON, GitHub annotations
 ├── telemetry/           # Prometheus metrics, spend ledger, OTLP tracing, budget gate
 └── eval/                # Eval harness with precision/recall gates
@@ -319,6 +376,8 @@ make snapshot     # local goreleaser snapshot (no publish)
 | F | done | Layer-3 reviewers: golden path, reliability, conventions |
 | G | done | CLI (cobra), reporters (text/json/github), MCP server, GitHub Action |
 | H | done | Community golden paths, goreleaser, cosign-signed releases, SBOM |
+| I | done | `generate` service scaffolding (CLI + MCP), Docker GitHub Action + GHCR image |
+| — | next | Helm + multi-archetype templates (worker, API, data pipeline); see PLAN.md vision |
 
 ---
 
