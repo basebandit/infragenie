@@ -47,6 +47,37 @@ func TestRenderHelmChart(t *testing.T) {
 	require.NotContains(t, out, "{{")      // no template left
 }
 
+func TestDiscoverChangedKustomizations(t *testing.T) {
+	dir := t.TempDir()
+	overlay := filepath.Join(dir, "overlays", "prod")
+	require.NoError(t, os.MkdirAll(overlay, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(overlay, "kustomization.yaml"),
+		[]byte("resources:\n  - ../../base\n"), 0o644))
+
+	changed := []string{
+		filepath.Join(overlay, "patch.yaml"),
+		filepath.Join(dir, "README.md"),
+	}
+	require.Equal(t, []string{overlay}, DiscoverChangedKustomizations(changed))
+	require.Empty(t, DiscoverChangedKustomizations([]string{"main.go"}))
+}
+
+func TestRenderKustomization(t *testing.T) {
+	if !KustomizeAvailable() {
+		t.Skip("kustomize/kubectl not installed")
+	}
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "cm.yaml"),
+		[]byte("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: demo\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "kustomization.yaml"),
+		[]byte("resources:\n  - cm.yaml\ncommonLabels:\n  team: platform\n"), 0o644))
+
+	out, err := RenderKustomization(context.Background(), dir)
+	require.NoError(t, err)
+	require.Contains(t, out, "kind: ConfigMap")
+	require.Contains(t, out, "team: platform") // overlay applied
+}
+
 func TestRenderedPath(t *testing.T) {
-	require.True(t, strings.HasSuffix(RenderedPath("charts/app"), "<helm-rendered>.yaml"))
+	require.True(t, strings.HasSuffix(RenderedPath("charts/app", "helm-rendered"), "<helm-rendered>.yaml"))
 }
