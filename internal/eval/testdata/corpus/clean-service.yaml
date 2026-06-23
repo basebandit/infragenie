@@ -1,0 +1,56 @@
+name: clean-service
+description: A fully conformant service produces zero findings (precision guard).
+goldenpath:
+  version: 1
+  required_labels: [app.kubernetes.io/name]
+  security:
+    require_non_root: true
+    require_read_only_rootfs: true
+    require_network_policy: true
+    forbid_image_tag_latest: true
+  observability:
+    require_prometheus_annotations: true
+manifests:
+  deploy.yaml: |
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: web
+      labels:
+        app.kubernetes.io/name: web
+    spec:
+      replicas: 2
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: web
+          annotations:
+            prometheus.io/scrape: "true"
+            prometheus.io/port: "8080"
+        spec:
+          securityContext:
+            runAsNonRoot: true
+          containers:
+            - name: web
+              image: web:1.0.0
+              securityContext:
+                readOnlyRootFilesystem: true
+              resources:
+                limits: {cpu: "500m", memory: "256Mi"}
+                requests: {cpu: "250m", memory: "128Mi"}
+              livenessProbe:
+                httpGet: {path: /healthz, port: 8080}
+              readinessProbe:
+                httpGet: {path: /readyz, port: 8080}
+    ---
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: web
+      labels:
+        app.kubernetes.io/name: web
+    spec:
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: web
+expected: []

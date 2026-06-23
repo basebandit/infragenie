@@ -2,6 +2,45 @@
 
 Regression harness for the engine. Catches silent quality regressions when prompts, scanners, or grounding logic change.
 
+There are two complementary suites:
+
+1. **Live corpus** (`testdata/corpus/*.yaml`, `TestLiveCorpus`) runs the deterministic reviewers against real manifests and computes precision/recall live. This is the real measure of detection quality and the source of the published numbers.
+2. **Recorded fixtures** (`testdata/*.json`, `TestFixtureCorpus`) replay a recorded run; cheap drift guards, useful for scanner/grounding output that's expensive to reproduce.
+
+## Published numbers (deterministic reviewers)
+
+From the live corpus (`go test ./internal/eval/... -run TestLiveCorpus -v`):
+
+```
+cases=5 tp=12 fp=0 fn=0 precision=1.000 recall=1.000 f1=1.000
+```
+
+These cover the GoldenPath, reliability, and conventions reviewers across clean and planted-bad manifests (Deployments and CronJobs). Re-run after changing reviewer logic and update this block.
+
+## Live corpus cases
+
+Each case is one YAML file: an inline `goldenpath`, a map of `manifests`, and the `expected` findings. The harness reviews the manifests and matches output against `expected` on rule_id + file.
+
+```yaml
+name: insecure-cronjob
+description: Batch workload running as root with a writable root filesystem.
+goldenpath:
+  version: 1
+  security: {require_non_root: true, require_read_only_rootfs: true}
+manifests:
+  cronjob.yaml: |
+    apiVersion: batch/v1
+    kind: CronJob
+    # ...
+expected:
+  - {rule_id: goldenpath.security.require-non-root, file: cronjob.yaml}
+  - {rule_id: goldenpath.security.require-readonly-rootfs, file: cronjob.yaml}
+```
+
+Keep each case tight: enable only the golden-path rules under test, and make the manifest satisfy everything else so a finding maps to exactly one expectation.
+
+## Recorded fixtures
+
 ## How it works
 
 Each fixture is a JSON file in `testdata/` pairing:

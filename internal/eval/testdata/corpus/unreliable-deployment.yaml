@@ -1,0 +1,25 @@
+name: unreliable-deployment
+description: Security disabled; Deployment with no limits, no probes, single replica.
+goldenpath:
+  version: 1
+manifests:
+  deploy.yaml: |
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: u
+    spec:
+      replicas: 1
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: u
+        spec:
+          containers:
+            - name: u
+              image: u:1.0.0
+expected:
+  - {rule_id: reliability.resource-limits, file: deploy.yaml}
+  - {rule_id: reliability.liveness-probe, file: deploy.yaml}
+  - {rule_id: reliability.readiness-probe, file: deploy.yaml}
+  - {rule_id: reliability.single-replica, file: deploy.yaml}
