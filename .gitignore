@@ -23,3 +23,6 @@ coverage.out
 
 # tool caches written during CI (trivy, etc.)
 .cache/
+
+# Claude Code personal/local config
+.claude/settings.local.json
