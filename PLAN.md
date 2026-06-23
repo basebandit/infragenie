@@ -674,9 +674,9 @@ v0 is the **paved-road kernel**: enforce a standard (`review`) and scaffold to i
 
 | Rung | Capability | Notes / boundary |
 |---|---|---|
-| 1 (now) | `generate` plain-manifest `k8s-service` + `review` | shipped |
-| 2 | Helm-chart template | needs a reviewer tweak so `Chart.yaml` isn't falsely flagged for missing labels |
-| 3 | Multi-archetype templates: HTTP/gRPC API, worker, event-driven, data pipeline, AI service | each conformant-by-construction; full paved road (CI/CD, security, observability, tests, runbook) |
+| 1 | `generate` plain-manifest `k8s-service` + `review` | shipped |
+| 2 | `helm-service` Helm-chart template | shipped (reviewer now skips Helm `Chart.yaml`/values; generate-time `[[ ]]` delimiters) |
+| 3 (next) | Multi-archetype templates: HTTP/gRPC API, worker, event-driven, data pipeline, AI service | each conformant-by-construction; full paved road (CI/CD, security, observability, tests, runbook) |
 | 4 | `generate` emits IaC (Terraform/OpenTofu) for infra/env/IAM/secrets | **emit + PR only**; no `apply`/cloud mutation in this tool (honours the v0 non-goal) |
 | 5 | Service-catalog *export* (Backstage `catalog-info.yaml`, etc.) | integrate with an IDP; still not a catalog of our own |
 | 6 | Operational agents over MCP: troubleshoot, generate runbooks, drift PRs | HITL; reuses the trust gradient |

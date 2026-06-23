@@ -224,9 +224,9 @@ infragenie review --goldenpath goldenpath.yml --diff HEAD~1
 The scaffold is correct, not complete: you still fill in application code, real CI
 step commands (generated steps are matcher placeholders), and `TODO` label values.
 
-The shipped `k8s-service` template emits plain Kubernetes manifests + Dockerfile +
-CI workflow. Helm-chart and additional archetype templates (worker, API, data
-pipeline) are on the roadmap.
+Two templates ship: `k8s-service` (plain Kubernetes manifests + Dockerfile + CI)
+and `helm-service` (a Helm chart). Additional archetype templates (worker, API,
+data pipeline) are on the roadmap.
 
 ---
 
@@ -377,7 +377,8 @@ make snapshot     # local goreleaser snapshot (no publish)
 | G | done | CLI (cobra), reporters (text/json/github), MCP server, GitHub Action |
 | H | done | Community golden paths, goreleaser, cosign-signed releases, SBOM |
 | I | done | `generate` service scaffolding (CLI + MCP), Docker GitHub Action + GHCR image |
-| — | next | Helm + multi-archetype templates (worker, API, data pipeline); see PLAN.md vision |
+| J | done | `helm-service` generate template + reviewer fix for Helm chart metadata |
+| — | next | Multi-archetype templates (worker, API, data pipeline); see PLAN.md vision |
 
 ---
 
