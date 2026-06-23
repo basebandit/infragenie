@@ -100,6 +100,25 @@ func TestGoldenPath_CIStepMissing(t *testing.T) {
 	require.NotEmpty(t, findByRuleID(fs, "goldenpath.ci.required-step"))
 }
 
+func TestGoldenPath_HelmChartMetaNotLabelChecked(t *testing.T) {
+	// Chart.yaml carries Helm's apiVersion but is not a K8s object; it must not
+	// be flagged for missing required labels. Same for values files.
+	chart := "apiVersion: v2\nname: payments\nversion: 0.1.0\n"
+	values := "apiVersion: ignored\nimage:\n  repository: payments\n  tag: 1.2.3\n"
+	gp := &models.GoldenPath{RequiredLabels: []string{"team", "app"}}
+
+	for _, path := range []string{"charts/payments/Chart.yaml", "charts/payments/values.yaml", "charts/payments/values-prod.yaml"} {
+		content := chart
+		if strings.Contains(path, "values") {
+			content = values
+		}
+		in := makeInput(path, content, gp)
+		fs, err := GoldenPathReviewer{}.Review(context.Background(), in)
+		require.NoError(t, err)
+		require.Emptyf(t, findByRuleID(fs, "goldenpath.required-label"), "unexpected label finding for %s", path)
+	}
+}
+
 func TestGoldenPath_NilGoldenPathIsNoop(t *testing.T) {
 	in := makeInput("deploy.yaml", deployBase, nil)
 	fs, err := GoldenPathReviewer{}.Review(context.Background(), in)

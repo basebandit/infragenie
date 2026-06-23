@@ -231,7 +231,28 @@ func isK8sManifest(path string) bool {
 	return (strings.HasSuffix(path, ".yaml") || strings.HasSuffix(path, ".yml")) &&
 		!strings.Contains(path, ".github/") &&
 		!strings.Contains(path, ".gitlab-ci") &&
-		!strings.Contains(path, "azure-pipelines")
+		!strings.Contains(path, "azure-pipelines") &&
+		!isHelmChartMeta(path)
+}
+
+// isHelmChartMeta reports whether path is Helm chart metadata rather than a
+// Kubernetes API object. Chart.yaml carries `apiVersion:` (Helm's, not K8s') and
+// values files have no manifest shape, so neither should be checked for required
+// labels, security context, or other K8s manifest rules.
+func isHelmChartMeta(path string) bool {
+	base := path
+	if i := strings.LastIndexByte(path, '/'); i >= 0 {
+		base = path[i+1:]
+	}
+	switch {
+	case base == "Chart.yaml", base == "Chart.yml":
+		return true
+	case base == "values.yaml", base == "values.yml":
+		return true
+	case strings.HasPrefix(base, "values-") && (strings.HasSuffix(base, ".yaml") || strings.HasSuffix(base, ".yml")):
+		return true
+	}
+	return false
 }
 
 func hasK8sAPIVersion(content string) bool {
