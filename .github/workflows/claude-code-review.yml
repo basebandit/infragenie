@@ -1,0 +1,37 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+# Cancel an in-flight review when the PR is updated.
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  claude-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Review this pull request and leave concise, actionable feedback as
+            review comments. Focus on:
+              - Correctness and Go idioms; error handling; edge cases.
+              - Test coverage for new/changed behaviour.
+              - For changes under internal/reviewers or internal/generate, whether
+                the generate→review conformance contract still holds.
+              - Security and supply-chain concerns.
+            Cite file:line. Skip pure style nits. Praise is unnecessary — surface
+            problems and suggest fixes.
+          claude_args: "--max-turns 15"
