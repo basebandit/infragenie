@@ -43,6 +43,18 @@ func registeredScanners() []ScannerMeta {
 			InstallHint: "go install github.com/yannh/kubeconform/cmd/kubeconform@latest",
 		},
 		{
+			Scanner:     infra.NewTFLint(),
+			Category:    "infra",
+			Description: "Terraform linter (provider rules, deprecations, naming)",
+			InstallHint: "brew install tflint (or https://github.com/terraform-linters/tflint/releases)",
+		},
+		{
+			Scanner:     infra.NewTrivyConfig(),
+			Category:    "infra",
+			Description: "IaC misconfiguration scan (K8s, Terraform, Dockerfile) via trivy config",
+			InstallHint: "brew install trivy (or https://github.com/aquasecurity/trivy/releases)",
+		},
+		{
 			Scanner:     lang.NewSemgrep(),
 			Category:    "lang",
 			Description: "Go, Python, JS/TS, Java, Ruby, Rust and more — community ruleset",
