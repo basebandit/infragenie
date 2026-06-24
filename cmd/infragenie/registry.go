@@ -66,6 +66,12 @@ func registeredScanners() []ScannerMeta {
 			Description: "Go source security issues",
 			InstallHint: "go install github.com/securego/gosec/v2/cmd/gosec@latest",
 		},
+		{
+			Scanner:     lang.NewGovulncheck(),
+			Category:    "lang",
+			Description: "Go known-vulnerability scan (called symbols only)",
+			InstallHint: "go install golang.org/x/vuln/cmd/govulncheck@latest",
+		},
 	}
 }
 
