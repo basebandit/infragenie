@@ -31,6 +31,18 @@ func registeredScanners() []ScannerMeta {
 			InstallHint: "wget -qO /usr/local/bin/hadolint https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64 && chmod +x /usr/local/bin/hadolint",
 		},
 		{
+			Scanner:     infra.NewKubeScore(),
+			Category:    "infra",
+			Description: "Kubernetes manifest reliability/security best practices",
+			InstallHint: "brew install kube-score (or https://github.com/zegl/kube-score/releases)",
+		},
+		{
+			Scanner:     infra.NewKubeconform(),
+			Category:    "infra",
+			Description: "Kubernetes manifest schema validation",
+			InstallHint: "go install github.com/yannh/kubeconform/cmd/kubeconform@latest",
+		},
+		{
 			Scanner:     lang.NewSemgrep(),
 			Category:    "lang",
 			Description: "Go, Python, JS/TS, Java, Ruby, Rust and more — community ruleset",
