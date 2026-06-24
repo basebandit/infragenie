@@ -16,7 +16,7 @@ const checkovSample = `{
         "file_path": "/k8s/deployment.yaml",
         "file_line_range": [12, 20],
         "severity": "MEDIUM",
-        "guideline": "https://docs.checkov.io/CKV_K8S_10"
+        "guideline": "https://www.checkov.io/"
       },
       {
         "check_id": "CKV_K8S_38",
@@ -40,7 +40,7 @@ func TestParseCheckov(t *testing.T) {
 	require.Equal(t, models.SeverityMedium, fs[0].Severity)
 	require.Equal(t, "k8s/deployment.yaml", fs[0].File)
 	require.Equal(t, 12, fs[0].Line)
-	require.Equal(t, []string{"https://docs.checkov.io/CKV_K8S_10"}, fs[0].References)
+	require.Equal(t, []string{"https://www.checkov.io/"}, fs[0].References)
 
 	require.Equal(t, models.SeverityMedium, fs[1].Severity) // null severity → default
 	require.Empty(t, fs[1].References)
