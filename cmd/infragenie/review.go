@@ -10,6 +10,7 @@ import (
 	"github.com/basebandit/infragenie/internal/goldenpath"
 	"github.com/basebandit/infragenie/internal/grounding"
 	"github.com/basebandit/infragenie/internal/llm"
+	"github.com/basebandit/infragenie/internal/prcomment"
 	"github.com/basebandit/infragenie/internal/render"
 	"github.com/basebandit/infragenie/internal/repo"
 	"github.com/basebandit/infragenie/internal/reporter"
@@ -18,6 +19,7 @@ import (
 	"github.com/basebandit/infragenie/internal/telemetry"
 	"github.com/basebandit/infragenie/pkg/config"
 	"github.com/basebandit/infragenie/pkg/models"
+	"github.com/google/go-github/v66/github"
 	"github.com/spf13/cobra"
 )
 
@@ -36,6 +38,7 @@ func reviewCmd(appCfg **config.AppConfig) *cobra.Command {
 		noGround        bool
 		fix             bool
 		fixAuto         bool
+		comment         bool
 		scannerOverride []string
 	)
 
@@ -60,17 +63,20 @@ func reviewCmd(appCfg **config.AppConfig) *cobra.Command {
 
 			// load diff
 			var d *models.Diff
+			var prRef diff.PRRef
+			var ghToken string
 			switch {
 			case prTarget != "":
-				tok := githubToken
-				if tok == "" {
-					tok = os.Getenv("GITHUB_TOKEN")
+				ghToken = githubToken
+				if ghToken == "" {
+					ghToken = os.Getenv("GITHUB_TOKEN")
 				}
 				pr, err := diff.ParsePRURL(prTarget)
 				if err != nil {
 					return fmt.Errorf("pr: %w", err)
 				}
-				d, err = diff.GitHubPR(ctx, pr, tok)
+				prRef = pr
+				d, err = diff.GitHubPR(ctx, pr, ghToken)
 				if err != nil {
 					return fmt.Errorf("pr fetch: %w", err)
 				}
@@ -196,6 +202,18 @@ func reviewCmd(appCfg **config.AppConfig) *cobra.Command {
 				return err
 			}
 
+			// post or update a single deduplicated summary comment on the PR
+			if comment && prTarget != "" {
+				client := github.NewClient(nil)
+				if ghToken != "" {
+					client = client.WithAuthToken(ghToken)
+				}
+				body := prcomment.Render(result.Findings)
+				if err := prcomment.Upsert(ctx, client, prRef.Owner, prRef.Repo, prRef.Number, body); err != nil {
+					fmt.Fprintf(os.Stderr, "comment: %v\n", err)
+				}
+			}
+
 			// human-in-the-loop fix suggestions
 			if (fix || fixAuto) && len(result.Findings) > 0 {
 				if err := runFix(ctx, result.Findings, providerName, apiKey, resolvedModel, fixAuto); err != nil {
@@ -212,6 +230,7 @@ func reviewCmd(appCfg **config.AppConfig) *cobra.Command {
 	cmd.Flags().StringVarP(&diffRef, "diff", "d", "", "local git ref to diff against (e.g. HEAD~1)")
 	cmd.Flags().StringVar(&prTarget, "pr", "", "GitHub PR: owner/repo#N or full URL")
 	cmd.Flags().StringVar(&githubToken, "github-token", "", "GitHub token (default: $GITHUB_TOKEN)")
+	cmd.Flags().BoolVar(&comment, "comment", false, "post/update a single summary comment on the PR (requires --pr)")
 	cmd.Flags().StringVar(&providerName, "provider", "", "LLM provider for grounding: anthropic, openai, local")
 	cmd.Flags().StringVar(&model, "model", "", "LLM model (default chosen per provider)")
 	cmd.Flags().StringVarP(&format, "format", "f", "text", "output format: text, json, github, sarif")
