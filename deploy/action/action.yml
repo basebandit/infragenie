@@ -36,6 +36,10 @@ inputs:
     description: "PR reference (owner/repo#N). Defaults to the triggering PR."
     required: false
     default: ""
+  comment:
+    description: "Post/update a single summary comment on the PR (needs pull-requests: write)."
+    required: false
+    default: "true"
 
 runs:
   using: docker
@@ -51,3 +55,4 @@ runs:
     INPUT_BUDGET_TOKENS: ${{ inputs.budget-tokens }}
     INPUT_BUDGET_USD: ${{ inputs.budget-usd }}
     INPUT_PR: ${{ inputs.pr }}
+    INPUT_COMMENT: ${{ inputs.comment }}
