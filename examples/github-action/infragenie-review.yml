@@ -32,6 +32,9 @@ jobs:
           fail-on: high
           budget-tokens: "50000"
           budget-usd: "0.50"
+          # Posts/updates one summary comment on the PR (needs pull-requests: write
+          # above). Set to "false" to rely on inline annotations only.
+          comment: "true"
 
       # ── Alternative: raw CLI (no Docker action) ──────────────────────────────
       # Use this if you prefer to pin the binary and scanners yourself.

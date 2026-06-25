@@ -11,6 +11,7 @@ fail_on="${INPUT_FAIL_ON:-high}"
 budget_tokens="${INPUT_BUDGET_TOKENS:-50000}"
 budget_usd="${INPUT_BUDGET_USD:-0.50}"
 pr="${INPUT_PR:-}"
+comment="${INPUT_COMMENT:-true}"
 
 # Derive the PR reference from the event when not supplied explicitly.
 if [[ -z "$pr" ]]; then
@@ -32,5 +33,6 @@ args=(review
 
 [[ -n "$provider" ]] && args+=(--provider "$provider")
 [[ -n "$model" ]] && args+=(--model "$model")
+[[ "$comment" == "true" ]] && args+=(--comment)
 
 exec infragenie "${args[@]}"
