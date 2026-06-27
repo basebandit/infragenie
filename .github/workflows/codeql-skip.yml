@@ -1,0 +1,23 @@
+# Companion to codeql-analysis.yml. On docs-only PRs the real CodeQL workflow is
+# path-filtered out, which would leave a *required* "Analyze (go)" check pending
+# forever. This provides a same-named check that passes for those paths, so the
+# requirement is satisfied without running a scan. See GitHub docs: "Handling
+# skipped but required checks".
+name: CodeQL
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '**/*.md'
+      - '**/*.txt'
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (go)
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Docs-only change; CodeQL analysis not required."
