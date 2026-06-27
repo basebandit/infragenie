@@ -129,6 +129,20 @@ func checkSecurity(f models.FileDiff, doc manifestDoc, sec models.Security, file
 		})
 	}
 
+	if sec.ForbidPrivileged && havePodSpec && ps.hasPrivilegedContainer() {
+		findings = append(findings, models.Finding{
+			RuleID:      "goldenpath.security.forbid-privileged",
+			Severity:    models.SeverityCritical,
+			File:        f.Path,
+			Title:       "privileged container",
+			Explanation: "GoldenPath forbids privileged containers; privileged: true grants full host access.",
+			Suggestion:  "Remove `privileged: true`; grant only the specific capabilities the container needs.",
+			Confidence:  0.95,
+			Evidence:    "securityContext.privileged: true",
+			EvidenceLoc: fmt.Sprintf("%s:%s", f.Path, doc.Kind),
+		})
+	}
+
 	if sec.RequireNetworkPolicy && !fileHasNetworkPolicy {
 		findings = append(findings, models.Finding{
 			RuleID:      "goldenpath.security.require-network-policy",
