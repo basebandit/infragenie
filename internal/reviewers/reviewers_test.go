@@ -278,6 +278,35 @@ spec:
 	require.NotEmpty(t, findByRuleID(fs, "goldenpath.security.require-readonly-rootfs"), "container b lacks readOnlyRootFilesystem")
 }
 
+func TestGoldenPath_ForbidPrivileged(t *testing.T) {
+	manifest := `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: x
+spec:
+  template:
+    spec:
+      containers:
+      - name: x
+        image: x:1.0.0
+        securityContext:
+          privileged: true
+`
+	gp := &models.GoldenPath{Security: models.Security{ForbidPrivileged: true}}
+	in := makeInput("deploy.yaml", manifest, gp)
+	fs, err := GoldenPathReviewer{}.Review(context.Background(), in)
+	require.NoError(t, err)
+	found := findByRuleID(fs, "goldenpath.security.forbid-privileged")
+	require.NotEmpty(t, found)
+	require.Equal(t, models.SeverityCritical, found[0].Severity)
+
+	clean := strings.ReplaceAll(manifest, "privileged: true", "privileged: false")
+	in = makeInput("deploy.yaml", clean, gp)
+	fs, err = GoldenPathReviewer{}.Review(context.Background(), in)
+	require.NoError(t, err)
+	require.Empty(t, findByRuleID(fs, "goldenpath.security.forbid-privileged"))
+}
+
 func TestGoldenPath_StructuralSecurityContextClean(t *testing.T) {
 	manifest := `apiVersion: apps/v1
 kind: Deployment

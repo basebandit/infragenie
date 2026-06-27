@@ -12,7 +12,7 @@ There are two complementary suites:
 From the live corpus (`go test ./internal/eval/... -run TestLiveCorpus -v`):
 
 ```
-cases=5 tp=12 fp=0 fn=0 precision=1.000 recall=1.000 f1=1.000
+cases=6 tp=13 fp=0 fn=0 precision=1.000 recall=1.000 f1=1.000
 ```
 
 These cover the GoldenPath, reliability, and conventions reviewers across clean and planted-bad manifests (Deployments and CronJobs). Re-run after changing reviewer logic and update this block.

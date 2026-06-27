@@ -34,6 +34,7 @@ The deterministic reviewers (`internal/reviewers/`) read these per-file:
 
 - `required_labels` → every K8s manifest's `metadata.labels` must contain them (validated by single-doc YAML unmarshal; skipped on parse error).
 - `security.forbid_image_tag_latest` → no `:latest` anywhere in a manifest.
+- `security.forbid_privileged` → no container sets `securityContext.privileged: true` (critical).
 - `security.require_non_root` / `require_read_only_rootfs` → Deployment must contain `runAsNonRoot`/`runAsUser`, `readOnlyRootFilesystem: true`.
 - `security.require_network_policy` → the **Deployment file itself** must contain `kind: NetworkPolicy` (the check is per-file — co-locate it).
 - `observability.require_prometheus_annotations` → Deployment must contain `prometheus.io/scrape` or `/port`.

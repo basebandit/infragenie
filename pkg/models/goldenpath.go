@@ -54,6 +54,7 @@ type Security struct {
 	RequireNonRoot        bool `yaml:"require_non_root,omitempty"`
 	RequireReadOnlyRootFS bool `yaml:"require_read_only_rootfs,omitempty"`
 	ForbidImageTagLatest  bool `yaml:"forbid_image_tag_latest,omitempty"`
+	ForbidPrivileged      bool `yaml:"forbid_privileged,omitempty"`
 }
 
 type Observability struct {

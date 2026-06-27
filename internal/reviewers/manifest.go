@@ -98,14 +98,14 @@ func isWorkloadKind(kind string) bool {
 	return isLongRunningKind(kind) || isBatchKind(kind)
 }
 
-// ── structural pod-spec extraction ──────────────────────────────────────────────
-// These types let security checks reason about the actual securityContext at pod
-// and container level, instead of substring-matching anywhere in the file.
+// Structural pod-spec types let security checks reason about the actual
+// securityContext at pod and container level, not substrings in the file.
 
 type containerSecurityContext struct {
 	RunAsNonRoot           *bool  `yaml:"runAsNonRoot"`
 	RunAsUser              *int64 `yaml:"runAsUser"`
 	ReadOnlyRootFilesystem *bool  `yaml:"readOnlyRootFilesystem"`
+	Privileged             *bool  `yaml:"privileged"`
 }
 
 type container struct {
@@ -194,6 +194,16 @@ func (p podSpec) allContainersReadOnlyRoot() bool {
 		}
 	}
 	return true
+}
+
+// hasPrivilegedContainer reports whether any container sets privileged: true.
+func (p podSpec) hasPrivilegedContainer() bool {
+	for _, c := range p.Containers {
+		if c.SecurityContext != nil && c.SecurityContext.Privileged != nil && *c.SecurityContext.Privileged {
+			return true
+		}
+	}
+	return false
 }
 
 func scNonRoot(runAsNonRoot *bool, runAsUser *int64) bool {
