@@ -1,12 +1,22 @@
 # CLAUDE.md
 
-Instructions for AI agents in this repo. Be terse, verify before claiming done, keep diffs small.
+How to work on InfraGenie. Merges with your default behavior; explicit user instructions win.
 
-## What this is
+## 1. State assumptions; ask when unsure
 
-InfraGenie: a Golden Path engine. Codify infra standards in `goldenpath.yml`, then **review** diffs/PRs against them and **generate** services that conform. Surfaces: CLI (`cmd/infragenie`), GitHub Action (`deploy/action`), MCP (`internal/mcp`), webhook (`cmd/infragenie/serve.go` + `internal/webhook`). Go 1.25.
+Don't guess at intent. If a requirement is ambiguous, say what you're assuming and proceed, or ask first. Don't hide confusion behind plausible-looking code.
 
-## Verify (run before saying it works)
+## 2. Keep it simple
+
+Build what was asked, nothing more. No speculative flexibility, configuration, or abstraction that wasn't requested. Before finishing, ask: would a senior engineer call this overcomplicated? If so, cut it back.
+
+## 3. Edit narrowly
+
+Match the surrounding code's style and patterns. Touch only what the task needs. Remove dead code your change creates; leave pre-existing dead code alone. Keep comments plain and minimal, no `// ── … ──` banner lines.
+
+## 4. Verify, don't assert
+
+Turn the task into something testable. For a bug, write a test that reproduces it, then make it pass. Before claiming done, run:
 
 ```
 make build
@@ -14,31 +24,20 @@ make test     # go test -race ./...
 make lint
 ```
 
-Never assert success without running these. If tests fail, say so with the output.
+If anything fails, report it with the output. No success claims without evidence.
 
-## Invariants — do not break
+## Invariants (don't break these)
 
-- **Generated output passes its own review.** `generate` then `review` against the same golden path yields zero Golden Path findings. Locked by `internal/generate/generate_test.go`; keep it green.
-- **Reviewers are deterministic and per-document.** `internal/reviewers` parses each YAML doc structurally (kind, labels, securityContext). Don't substring-guess. Helm/Kustomize are rendered first (`internal/render`); undecodable templates are skipped, not guessed.
-- **LLM calls use native structured output. No regex extraction from markdown.**
-- **Scanners detect-or-skip.** Missing binary is a structured skip, never an error.
-- The live eval corpus (`internal/eval`) gates precision/recall. Don't regress it.
+- `generate` output must pass its own `review` (zero Golden Path findings). Locked by `internal/generate/generate_test.go`.
+- Reviewers are deterministic and parse each YAML document structurally; never substring-guess. Helm/Kustomize render before review.
+- LLM calls use native structured output; no regex parsing of model text.
+- Scanners detect-or-skip; a missing binary is never an error.
+- Don't regress the `internal/eval` precision/recall corpus.
 
-## Conventions
+## Git
 
-- Tests use `testify` (`require`/`assert`). Comments: plain and minimal, no `// ── … ──` banner lines.
-- Use `basebandit` as the placeholder org/repo in docs and examples.
-- Commits: Conventional Commits, one-line subject, no `Co-Authored-By` trailer, no em dashes.
-- PRs: one concern, about 10 files or fewer. Body follows the template headers (Summary/Context/Testing/Risk), prose, no "Generated with Claude Code" footer. See the `writing-prs` skill.
-- Branches: `git fetch && git rebase origin/main` (never stale local main). Don't merge main into a branch; it breaks the commitlint check.
+- Conventional Commits, one-line subject, no `Co-Authored-By`, no em dashes.
+- One concern per PR (about 10 files or fewer). PR body uses the repo template; no "Generated with Claude Code" footer.
+- `git fetch && git rebase origin/main` before pushing; never merge main into a branch.
 
-## Extending
-
-- Scanner: `internal/scanners/{infra,lang}`, register in `cmd/infragenie/registry.go`.
-- Reviewer: implement `reviewers.Reviewer`, add to the slices in `cmd/infragenie/review.go` and `internal/mcp/server.go`.
-- LLM provider: `internal/llm` (native structured output).
-- Generate template: `internal/generate/templates.go` + embedded files; must satisfy the conformance test.
-
-## Skills
-
-Use the project skills when relevant: `writing-prs`, `extending-infragenie`, `authoring-golden-paths`, `service-generation`, `agent-integration`.
+Use the project skills when they fit: `writing-prs`, `extending-infragenie`, `authoring-golden-paths`, `service-generation`, `agent-integration`.
