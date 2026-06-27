@@ -26,3 +26,7 @@ coverage.out
 
 # Claude Code personal/local config
 .claude/settings.local.json
+
+# Local-only planning docs (not public)
+PLAN.md
+PRODUCTION_TODO.md

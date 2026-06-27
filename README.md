@@ -175,8 +175,7 @@ make test    # go test -race ./...
 make lint
 ```
 
-Architecture and contributor notes live in `CLAUDE.md`; design and roadmap in
-`PLAN.md`.
+Architecture and contributor notes live in `CLAUDE.md`.
 
 ## License
 
