@@ -50,6 +50,22 @@ jobs:
       - name: golangci-lint
         run: golangci-lint run ./...
 
+  vuln-scan:
+    name: Vulnerability scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Same scan the release gate runs, so dependency CVEs fail the PR rather
+      # than surfacing only at tag time.
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+
   secret-scan:
     name: Secret scan
     runs-on: ubuntu-latest

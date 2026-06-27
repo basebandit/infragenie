@@ -1,0 +1,22 @@
+version: 2
+updates:
+  # Go module dependencies. Dependabot opens bump PRs (and security updates
+  # automatically), so we no longer hand-bump versions to clear advisories.
+  - package-ecosystem: gomod
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: chore
+    groups:
+      go-modules:
+        patterns: ["*"]
+
+  # Keep pinned GitHub Actions current.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
