@@ -94,7 +94,7 @@ func reviewCmd(appCfg **config.AppConfig) *cobra.Command {
 					root = "."
 				}
 				var err error
-				d, err = diff.Tree(root)
+				d, err = diff.Tree(ctx, root)
 				if err != nil {
 					return fmt.Errorf("scan %s: %w", root, err)
 				}

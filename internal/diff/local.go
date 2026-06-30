@@ -73,7 +73,8 @@ var treeSkipDirs = map[string]bool{
 // Tree builds a Diff from the current files under root, with every text file
 // marked as added and its contents loaded. It is the "review what's here now"
 // mode: no git history required. Binary and oversized files are skipped.
-func Tree(root string) (*models.Diff, error) {
+// The walk honours ctx cancellation so large trees can be aborted.
+func Tree(ctx context.Context, root string) (*models.Diff, error) {
 	if root == "" {
 		root = "."
 	}
@@ -81,6 +82,9 @@ func Tree(root string) (*models.Diff, error) {
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
+		}
+		if cerr := ctx.Err(); cerr != nil {
+			return cerr
 		}
 		if d.IsDir() {
 			if path != root && treeSkipDirs[d.Name()] {

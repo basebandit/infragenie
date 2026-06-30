@@ -60,7 +60,7 @@ func TestTreeScan(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "node_modules", "x.js"), []byte("ignored"), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "bin.dat"), []byte{0x00, 0x01, 0x02}, 0o644))
 
-	d, err := Tree(dir)
+	d, err := Tree(context.Background(), dir)
 	require.NoError(t, err)
 
 	got := map[string]string{}
@@ -73,4 +73,13 @@ func TestTreeScan(t *testing.T) {
 	require.Contains(t, got["k8s/deploy.yaml"], "kind: Deployment")
 	require.NotContains(t, got, filepath.Join("node_modules", "x.js"), "vendored dirs skipped")
 	require.NotContains(t, got, "bin.dat", "binary files skipped")
+}
+
+func TestTreeScan_ContextCancelled(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.yaml"), []byte("x: 1\n"), 0o644))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := Tree(ctx, dir)
+	require.Error(t, err)
 }
