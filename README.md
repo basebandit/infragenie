@@ -46,7 +46,9 @@ infragenie review --goldenpath goldenpath.yml --diff HEAD~1
 infragenie review --goldenpath goldenpath.yml --pr owner/repo#42 --comment
 ```
 
-Run `infragenie <command> --help` for the full flag set.
+Run `infragenie <command> --help` for the full flag set. Onboarding an existing
+service? See [docs/onboarding/](docs/onboarding/) for a step-by-step guide (any
+language, with or without an LLM key).
 
 ## goldenpath.yml
 
