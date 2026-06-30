@@ -1,6 +1,7 @@
 package diff
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"os/exec"
@@ -59,6 +60,7 @@ func TestTreeScan(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, "node_modules"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "node_modules", "x.js"), []byte("ignored"), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "bin.dat"), []byte{0x00, 0x01, 0x02}, 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "big.txt"), bytes.Repeat([]byte("a"), maxTreeFile+1), 0o644))
 
 	d, err := Tree(context.Background(), dir)
 	require.NoError(t, err)
@@ -73,6 +75,7 @@ func TestTreeScan(t *testing.T) {
 	require.Contains(t, got["k8s/deploy.yaml"], "kind: Deployment")
 	require.NotContains(t, got, filepath.Join("node_modules", "x.js"), "vendored dirs skipped")
 	require.NotContains(t, got, "bin.dat", "binary files skipped")
+	require.NotContains(t, got, "big.txt", "oversized files skipped")
 }
 
 func TestTreeScan_ContextCancelled(t *testing.T) {
