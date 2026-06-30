@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 
 	"gopkg.in/yaml.v3"
@@ -83,11 +84,25 @@ func Load(explicitPath string) (*AppConfig, error) {
 	if err != nil {
 		return nil, fmt.Errorf("config: read %s: %w", path, err)
 	}
+	raw = expandEnvRefs(raw)
 	var cfg AppConfig
 	if err := yaml.Unmarshal(raw, &cfg); err != nil {
 		return nil, fmt.Errorf("config: parse %s: %w", path, err)
 	}
 	return &cfg, nil
+}
+
+var envRefPattern = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
+
+// expandEnvRefs replaces ${VAR} references in the config with the matching
+// environment variable. This lets secrets be referenced from committed config
+// (api_key: ${OPENAI_API_KEY}) without embedding the value. Unset vars expand
+// to an empty string.
+func expandEnvRefs(b []byte) []byte {
+	return envRefPattern.ReplaceAllFunc(b, func(m []byte) []byte {
+		name := envRefPattern.FindSubmatch(m)[1]
+		return []byte(os.Getenv(string(name)))
+	})
 }
 
 // APIKey returns the resolved API key for provider using the lookup order:
