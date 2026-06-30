@@ -52,6 +52,12 @@ func reviewCmd(appCfg **config.AppConfig) *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := context.Background()
 
+			// --path only applies to the working-tree scan; reject combining it
+			// with a git diff or PR rather than silently ignoring it.
+			if scanPath != "" && (diffRef != "" || prTarget != "") {
+				return fmt.Errorf("--path cannot be combined with --diff or --pr")
+			}
+
 			// load golden path
 			var gp *models.GoldenPath
 			if gpPath != "" {
