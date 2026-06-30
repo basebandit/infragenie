@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// ── Load ──────────────────────────────────────────────────────────────────────
+// Load
 
 func TestLoad_NoFile(t *testing.T) {
 	// No config file anywhere — should return empty config, not error.
@@ -66,7 +66,7 @@ func TestLoad_ProjectFile(t *testing.T) {
 	require.Equal(t, "google", cfg.Providers.Default)
 }
 
-// ── APIKey ────────────────────────────────────────────────────────────────────
+// APIKey
 
 func TestAPIKey_EnvVarWins(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "env-key")
@@ -109,7 +109,7 @@ func TestAPIKey_AllProviders(t *testing.T) {
 	}
 }
 
-// ── Model ─────────────────────────────────────────────────────────────────────
+// Model
 
 func TestModel_EnvVarWins(t *testing.T) {
 	t.Setenv("OPENAI_MODEL", "gpt-4o")
@@ -149,7 +149,7 @@ func TestModel_AllProviders(t *testing.T) {
 	}
 }
 
-// ── BaseURL ───────────────────────────────────────────────────────────────────
+// BaseURL
 
 func TestBaseURL_LocalEnvVar(t *testing.T) {
 	t.Setenv("LOCAL_LLM_URL", "http://localhost:11434")
@@ -178,7 +178,7 @@ func TestBaseURL_EmptyForUnknown(t *testing.T) {
 	require.Equal(t, "", cfg.BaseURL("openai"))
 }
 
-// ── Defaults ──────────────────────────────────────────────────────────────────
+// Defaults
 
 func TestDefaultProvider_EnvVar(t *testing.T) {
 	t.Setenv("INFRAGENIE_PROVIDER", "anthropic")
@@ -234,7 +234,7 @@ func TestDefaultBudgetUSD_InvalidEnvFallsBackToConfig(t *testing.T) {
 	require.InDelta(t, 0.50, cfg.DefaultBudgetUSD(), 0.001)
 }
 
-// ── DefaultPath ───────────────────────────────────────────────────────────────
+// DefaultPath
 
 func TestDefaultPath_XDGOverride(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", "/custom/config")
@@ -248,7 +248,7 @@ func TestDefaultPath_HomeDirFallback(t *testing.T) {
 	require.Contains(t, p, ".config/infragenie/config.yml")
 }
 
-// ── helpers ───────────────────────────────────────────────────────────────────
+// helpers
 
 func writeTemp(t *testing.T, content string) string {
 	t.Helper()
@@ -258,4 +258,27 @@ func writeTemp(t *testing.T, content string) string {
 	require.NoError(t, err)
 	require.NoError(t, f.Close())
 	return f.Name()
+}
+
+func TestLoad_EnvInterpolation(t *testing.T) {
+	t.Setenv("MY_OPENAI_SECRET", "sk-from-env")
+	yml := `
+providers:
+  default: openai
+  openai:
+    api_key: ${MY_OPENAI_SECRET}
+    model: gpt-4o-mini
+`
+	cfg, err := Load(writeTemp(t, yml))
+	require.NoError(t, err)
+	require.NotNil(t, cfg.Providers.OpenAI)
+	require.Equal(t, "sk-from-env", cfg.Providers.OpenAI.APIKey, "${VAR} should resolve from env")
+}
+
+func TestLoad_EnvInterpolation_Unset(t *testing.T) {
+	yml := "providers:\n  openai:\n    api_key: ${DEFINITELY_UNSET_VAR_XYZ}\n"
+	cfg, err := Load(writeTemp(t, yml))
+	require.NoError(t, err)
+	require.NotNil(t, cfg.Providers.OpenAI)
+	require.Equal(t, "", cfg.Providers.OpenAI.APIKey, "unset var expands to empty")
 }
