@@ -25,9 +25,24 @@ func (ConventionsReviewer) Review(_ context.Context, in ReviewInput) ([]models.F
 			continue
 		}
 		findings = append(findings, checkAppKubernetesLabels(f)...)
-		findings = append(findings, checkRuntimeRules(f, in.GoldenPath)...)
+		// runtime_rules only apply to files that actually contain a Kubernetes
+		// object, so service descriptors and generic YAML aren't flagged.
+		if hasKubernetesDoc(f.NewContent) {
+			findings = append(findings, checkRuntimeRules(f, in.GoldenPath)...)
+		}
 	}
 	return findings, nil
+}
+
+// hasKubernetesDoc reports whether content holds at least one decodable
+// Kubernetes object (a document with a kind).
+func hasKubernetesDoc(content string) bool {
+	for _, d := range parseManifestDocs(content) {
+		if d.Decoded {
+			return true
+		}
+	}
+	return false
 }
 
 // checkAppKubernetesLabels flags manifests that use app: <name> but are missing

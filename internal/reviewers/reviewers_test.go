@@ -404,6 +404,19 @@ func TestConventions_WellKnownLabelsClean(t *testing.T) {
 	require.Empty(t, findByRuleID(fs, "conventions.app-kubernetes-io-labels"))
 }
 
+func TestConventions_RuntimeRuleSkipsNonK8sYAML(t *testing.T) {
+	// A service-descriptor YAML (no kind) must not trigger runtime_rules.
+	descriptor := "name: my-svc\nframework: fastmcp-python\nversion: 0.1.0\n"
+	gp := &models.GoldenPath{RuntimeRules: map[string]map[string]any{
+		"require-owner-annotation": {"pattern": "owner:"},
+	}}
+	in := makeInput("manifest.yaml", descriptor, gp)
+	fs, err := ConventionsReviewer{}.Review(context.Background(), in)
+	require.NoError(t, err)
+	require.Empty(t, findByRuleID(fs, "conventions.runtime-rule.require-owner-annotation"),
+		"runtime rules must not fire on non-Kubernetes YAML")
+}
+
 func TestConventions_RuntimeRuleViolation(t *testing.T) {
 	gp := &models.GoldenPath{RuntimeRules: map[string]map[string]any{
 		"require-owner-annotation": {
