@@ -69,7 +69,7 @@ func generateServiceCmd() *cobra.Command {
 			for _, f := range res.Files {
 				fmt.Printf("  %s\n", f)
 			}
-			fmt.Printf("next: infragenie review --goldenpath %s --diff HEAD\n", gpFlagOrDefault(gpPath))
+			fmt.Printf("next: infragenie review --goldenpath %s --path %s\n", gpFlagOrDefault(gpPath), res.Dir)
 			return nil
 		},
 	}

@@ -45,7 +45,7 @@ Starter templates:
 				return err
 			}
 			fmt.Printf("wrote %s\n", out)
-			fmt.Println("next: infragenie review --goldenpath goldenpath.yml --diff HEAD~1")
+			fmt.Println("next: infragenie review --goldenpath goldenpath.yml")
 			return nil
 		},
 	}

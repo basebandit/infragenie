@@ -1,11 +1,15 @@
 package diff
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/basebandit/infragenie/pkg/models"
 )
@@ -33,6 +37,11 @@ func Local(ctx context.Context, opts LocalOptions) (*models.Diff, error) {
 	cmd.Dir = opts.Root
 	out, err := cmd.Output()
 	if err != nil {
+		if ee, ok := err.(*exec.ExitError); ok {
+			if msg := strings.TrimSpace(string(ee.Stderr)); msg != "" {
+				return nil, fmt.Errorf("git diff: %w: %s", err, msg)
+			}
+		}
 		return nil, fmt.Errorf("git diff: %w", err)
 	}
 	files, err := Parse(out)
@@ -46,6 +55,62 @@ func Local(ctx context.Context, opts LocalOptions) (*models.Diff, error) {
 		if b, err := os.ReadFile(filepath.Join(opts.Root, files[i].Path)); err == nil {
 			files[i].NewContent = string(b)
 		}
+	}
+	return &models.Diff{Source: models.DiffSourceLocal, Files: files}, nil
+}
+
+// maxTreeFile caps the size of a file read during a Tree scan.
+const maxTreeFile = 1 << 20 // 1 MiB
+
+var treeSkipDirs = map[string]bool{
+	".git": true, ".svn": true, ".hg": true,
+	"node_modules": true, "vendor": true,
+	"dist": true, "build": true, "target": true,
+	".terraform": true, ".venv": true, "venv": true,
+	"__pycache__": true, ".pytest_cache": true, ".ruff_cache": true,
+}
+
+// Tree builds a Diff from the current files under root, with every text file
+// marked as added and its contents loaded. It is the "review what's here now"
+// mode: no git history required. Binary and oversized files are skipped.
+// The walk honours ctx cancellation so large trees can be aborted.
+func Tree(ctx context.Context, root string) (*models.Diff, error) {
+	if root == "" {
+		root = "."
+	}
+	var files []models.FileDiff
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if cerr := ctx.Err(); cerr != nil {
+			return cerr
+		}
+		if d.IsDir() {
+			if path != root && treeSkipDirs[d.Name()] {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if info, ierr := d.Info(); ierr == nil && info.Size() > maxTreeFile {
+			return nil
+		}
+		b, rerr := os.ReadFile(path)
+		if rerr != nil {
+			return nil
+		}
+		if !utf8.Valid(b) || bytes.IndexByte(b, 0) >= 0 {
+			return nil // skip binary
+		}
+		rel, rerr := filepath.Rel(root, path)
+		if rerr != nil {
+			rel = path
+		}
+		files = append(files, models.FileDiff{Path: rel, Status: "added", NewContent: string(b)})
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return &models.Diff{Source: models.DiffSourceLocal, Files: files}, nil
 }

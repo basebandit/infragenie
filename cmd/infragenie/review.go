@@ -39,6 +39,7 @@ func reviewCmd(appCfg **config.AppConfig) *cobra.Command {
 		fix             bool
 		fixAuto         bool
 		comment         bool
+		scanPath        string
 		scannerOverride []string
 	)
 
@@ -50,6 +51,12 @@ func reviewCmd(appCfg **config.AppConfig) *cobra.Command {
   infragenie review --goldenpath goldenpath.yml --pr owner/repo#42 --format github`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := context.Background()
+
+			// --path only applies to the working-tree scan; reject combining it
+			// with a git diff or PR rather than silently ignoring it.
+			if scanPath != "" && (diffRef != "" || prTarget != "") {
+				return fmt.Errorf("--path cannot be combined with --diff or --pr")
+			}
 
 			// load golden path
 			var gp *models.GoldenPath
@@ -87,7 +94,16 @@ func reviewCmd(appCfg **config.AppConfig) *cobra.Command {
 					return fmt.Errorf("local diff: %w", err)
 				}
 			default:
-				return fmt.Errorf("one of --diff or --pr is required")
+				// No --pr/--diff: review the current files under --path (default ".").
+				root := scanPath
+				if root == "" {
+					root = "."
+				}
+				var err error
+				d, err = diff.Tree(ctx, root)
+				if err != nil {
+					return fmt.Errorf("scan %s: %w", root, err)
+				}
 			}
 
 			// repo context
@@ -228,6 +244,7 @@ func reviewCmd(appCfg **config.AppConfig) *cobra.Command {
 
 	cmd.Flags().StringVarP(&gpPath, "goldenpath", "g", "", "path to goldenpath.yml")
 	cmd.Flags().StringVarP(&diffRef, "diff", "d", "", "local git ref to diff against (e.g. HEAD~1)")
+	cmd.Flags().StringVar(&scanPath, "path", "", "review current files under this directory (default: . when no --diff/--pr)")
 	cmd.Flags().StringVar(&prTarget, "pr", "", "GitHub PR: owner/repo#N or full URL")
 	cmd.Flags().StringVar(&githubToken, "github-token", "", "GitHub token (default: $GITHUB_TOKEN)")
 	cmd.Flags().BoolVar(&comment, "comment", false, "post/update a single summary comment on the PR (requires --pr)")
